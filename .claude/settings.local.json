@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"C:\\\\Users\\\\krist\\\\Documents\\\\CRM data\\\\rebil-ik-dashboard\\\\node_modules\\\\next\\\\dist\\\\docs\\\\01-app\\\\03-api-reference\"\" && echo \"---\" && ls \"C:UserskristDocumentsCRM datarebil-ik-dashboardnode_modulesnextdistdocs01-app01-getting-started\"\")",
+      "Bash(npm install:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

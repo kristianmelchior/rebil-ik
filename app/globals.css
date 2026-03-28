@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+/* Canonical accent red — use for inline styles / charts when needed */
+:root {
+  --rebil-red: #f40000;
+}
+
+@theme {
+  /* Brand colours */
+  --color-brand-red:          var(--rebil-red);
+  --color-brand-green:        #2D6A27;
+  --color-brand-green-hover:  #1E4A1B;
+
+  /* Surface colours */
+  --color-bg:                 #F5F5F3;
+  --color-surface:            #FFFFFF;
+  --color-border:             #E0E0E0;
+
+  /* Text colours */
+  --color-text-primary:       #111111;
+  --color-text-secondary:     #555555;
+  --color-text-muted:         #888888;
+  --color-text-hint:          #BBBBBB;
+
+  /* Flag / badge colours */
+  --color-flag-ok-bg:         #EAF3DE;
+  --color-flag-ok-text:       #27500A;
+  --color-flag-warn-bg:       #FAEEDA;
+  --color-flag-warn-text:     #633806;
+  --color-flag-red-bg:        #FCEBEB;
+  --color-flag-red-text:      #791F1F;
+
+  /* Typography — Inter loaded via next/font, exposed as --font-inter */
+  --font-sans: var(--font-inter), sans-serif;
+
+  /* Custom font sizes (overrides Tailwind defaults for matching names) */
+  --text-kpi:              34px;
+  --text-kpi--line-height: 1.1;
+  --text-xl:               22px;
+  --text-lg:               18px;
+  --text-base:             15px;
+  --text-sm:               13px;
+  --text-xs:               11px;
+
+  /* Border radii */
+  --radius-pill:  99px;
+  --radius-card:  12px;
+}
