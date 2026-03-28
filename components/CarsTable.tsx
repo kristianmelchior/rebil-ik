@@ -30,7 +30,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
 
   const totalBiler     = sorted.reduce((sum, r) => sum + r.biler,     0)
   const totalBrutto    = sorted.reduce((sum, r) => sum + r.brutto,    0)
-  const totalBonussats = sorted.reduce((sum, r) => sum + r.bonussats, 0)
+  const totalBonus = sorted.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
 
   return (
     <>
@@ -83,7 +83,9 @@ export default function CarsTable({ sales }: CarsTableProps) {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-text-primary text-right">{fmtKr(row.bonussats)}</td>
+                  <td className="px-4 py-3 text-text-primary text-right">
+                    {row.bonus != null ? fmtKr(row.bonus) : '—'}
+                  </td>
                 </tr>
               )
             })}
@@ -95,7 +97,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
               <td className="px-4 py-3">—</td>
               <td className="px-4 py-3 text-right">{fmtKr(totalBrutto)}</td>
               <td className="px-4 py-3">—</td>
-              <td className="px-4 py-3 text-right">{fmtKr(totalBonussats)}</td>
+              <td className="px-4 py-3 text-right">{fmtKr(totalBonus)}</td>
             </tr>
           </tfoot>
         </table>

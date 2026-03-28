@@ -45,8 +45,8 @@ export function computeBonus(
   leadRows: LeadRow[],
   npsRows: NpsRow[]
 ): BonusResult {
-  // Step 1 — Base bonus: SUM(bonussats) for all rows (Avslått rows included)
-  const baseBonus = saleRows.reduce((sum, r) => sum + r.bonussats, 0)
+  // Step 1 — Base bonus: SUM(bonus) for all rows (null → 0; Avslått rows included)
+  const baseBonus = saleRows.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
 
   // Step 2 — Conversion rate
   const carsThisMonth = saleRows.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)

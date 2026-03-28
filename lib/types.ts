@@ -16,8 +16,8 @@ export interface SaleRow {
   lq: boolean
   brutto: number
   prisgrense: string | null    // 'Pris' | 'Rabatt 1' | 'Rabatt 2' | 'Minstepris' | null
-  bonussats: number            // pre-calculated — source of truth
-  bonus: number | null
+  bonussats?: number           // legacy column (not used in UI / bonus math)
+  bonus: number | null         // bonus NOK per row — Bonusbidrag & base bonus sum
 }
 
 // Raw row from public.leads
