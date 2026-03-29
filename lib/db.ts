@@ -1,6 +1,7 @@
 // Only file that imports @supabase/supabase-js.
 // All functions throw on Supabase error — route handler catches and returns 500.
 
+import { randomUUID } from 'node:crypto'
 import { createClient } from '@supabase/supabase-js'
 import type { Rep, SaleRow, LeadRow, NpsRow } from './types'
 
@@ -26,13 +27,34 @@ const supabase = createClient(supabaseUrl(), supabaseKey())
 
 /**
  * Server-side client for feed_reactions / feed_comments.
- * Prefer SUPABASE_SERVICE_ROLE_KEY in env so inserts/select-after-insert work even when RLS
- * on those tables is misconfigured for the anon key (common with PostgREST .single() after insert).
+ * Set SUPABASE_SERVICE_ROLE_KEY (Project Settings → API → service_role) on the server
+ * so RLS never blocks these routes; the anon key often fails on insert/select for new tables.
  */
 let feedSocialClientSingleton: ReturnType<typeof createClient> | null = null
 
+function resolveServiceRoleKey(): string | undefined {
+  for (const name of [
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SUPABASE_SERVICE_KEY',
+    'SB_SERVICE_ROLE_KEY',
+  ] as const) {
+    const v = process.env[name]?.trim()
+    if (v) return v
+  }
+  return undefined
+}
+
+function formatSupabaseError(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const e = err as { message?: string; details?: string; hint?: string; code?: string }
+    const parts = [e.message, e.details, e.hint].filter(Boolean)
+    if (parts.length) return parts.join(' — ')
+  }
+  return err instanceof Error ? err.message : String(err)
+}
+
 function feedSocialClient() {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  const serviceKey = resolveServiceRoleKey()
   if (serviceKey) {
     if (!feedSocialClientSingleton) {
       feedSocialClientSingleton = createClient(supabaseUrl(), serviceKey, {
@@ -239,7 +261,14 @@ export async function fetchFeedCommentRows(saleIds: number[]): Promise<FeedComme
     .in('sale_id', saleIds)
     .order('created_at', { ascending: true })
 
-  if (error) throw error
+  if (error) {
+    const base = formatSupabaseError(error)
+    const hint =
+      resolveServiceRoleKey() == null
+        ? ' Legg til SUPABASE_SERVICE_ROLE_KEY i miljøvariabler for serveren.'
+        : ''
+    throw new Error(`${base}${hint}`)
+  }
   return (data ?? []) as FeedCommentRow[]
 }
 
@@ -249,17 +278,43 @@ export async function insertFeedComment(
   repName: string,
   body: string
 ): Promise<FeedCommentRow> {
-  const { data, error } = await feedSocialClient()
-    .from('feed_comments')
-    .insert({ sale_id: saleId, rep_kode: kode, rep_name: repName, body })
-    .select('id,sale_id,rep_kode,rep_name,body,created_at')
+  const db = feedSocialClient()
+  const id = randomUUID()
 
-  if (error) throw error
-  const row = data?.[0]
-  if (!row) {
-    throw new Error(
-      'Ingen rad returnert etter lagring. Sjekk at tabellen feed_comments finnes og at RLS tillater insert/select, eller sett SUPABASE_SERVICE_ROLE_KEY for serveren.'
-    )
+  const { error } = await db.from('feed_comments').insert({
+    id,
+    sale_id: saleId,
+    rep_kode: kode,
+    rep_name: repName,
+    body,
+  })
+
+  if (error) {
+    const base = formatSupabaseError(error)
+    const hint =
+      resolveServiceRoleKey() == null
+        ? ' Legg til SUPABASE_SERVICE_ROLE_KEY i .env.local (server) — se kommentar i lib/db.ts.'
+        : ''
+    throw new Error(`${base}${hint}`)
   }
-  return row as FeedCommentRow
+
+  const { data: row, error: readErr } = await db
+    .from('feed_comments')
+    .select('id,sale_id,rep_kode,rep_name,body,created_at')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (!readErr && row) {
+    return row as FeedCommentRow
+  }
+
+  const created_at = new Date().toISOString()
+  return {
+    id,
+    sale_id: saleId,
+    rep_kode: kode,
+    rep_name: repName,
+    body,
+    created_at,
+  }
 }

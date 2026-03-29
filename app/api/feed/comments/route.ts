@@ -24,8 +24,9 @@ export async function GET(request: NextRequest) {
     const rows = await fetchFeedCommentRows(saleIds)
     const payload = aggregateFeedComments(rows, saleIds)
     return Response.json(payload, { headers: { 'Cache-Control': 'no-store' } })
-  } catch {
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    return Response.json({ error: 'Internal server error', detail }, { status: 500 })
   }
 }
 

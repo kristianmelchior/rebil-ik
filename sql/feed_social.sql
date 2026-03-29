@@ -36,3 +36,8 @@ create policy "feed_comments_all" on public.feed_comments for all using (true) w
 -- Optional: server kan bruke SUPABASE_SERVICE_ROLE_KEY i .env for å omgå RLS på disse tabellene.
 grant select, insert, update, delete on public.feed_reactions to anon, authenticated;
 grant select, insert, update, delete on public.feed_comments to anon, authenticated;
+
+-- Feilsøking kommentarer: appen anbefaler SUPABASE_SERVICE_ROLE_KEY på serveren (Vercel / .env.local).
+-- Hvis du fortsatt får RLS-feil med kun anon-nøkkel, midlertidig (kun dev):
+--   alter table public.feed_comments disable row level security;
+-- Så finn riktig policy og skru RLS på igjen.
