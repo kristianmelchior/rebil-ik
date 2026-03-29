@@ -3,7 +3,7 @@
 // Rabatt badge driven by prisgrense column. Footer shows totals.
 
 import type { SaleRow } from '@/lib/types'
-import { fmtKr } from '@/lib/formatDisplay'
+import { fmtKr, fmtDatoKjoptShort } from '@/lib/formatDisplay'
 import { prisgrenseChipClass, HUBSPOT_SALES_DEAL_BASE } from '@/lib/rabattBadge'
 
 interface CarsTableProps {
@@ -27,10 +27,10 @@ export default function CarsTable({ sales }: CarsTableProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              {['Bil', 'Type', 'Innkjøpspris', 'Pris', 'Prisgrense', 'Bonusbidrag'].map((h, i) => (
+              {['Bil', 'Type', 'Dato', 'Innkjøpspris', 'Pris', 'Prisgrense', 'Bonusbidrag'].map((h, i) => (
                 <th
                   key={h}
-                  className={`px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider ${i >= 2 && i !== 4 ? 'text-right' : 'text-left'}`}
+                  className={`px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider ${i === 3 || i === 4 || i === 6 ? 'text-right' : 'text-left'}`}
                 >
                   {h}
                 </th>
@@ -62,6 +62,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
                     )}
                   </td>
                   <td className="px-4 py-3 text-text-secondary">{row.salgstype}</td>
+                  <td className="px-4 py-3 text-text-secondary">{fmtDatoKjoptShort(row.dato_kjopt)}</td>
                   <td className="px-4 py-3 text-text-primary text-right">
                     {row.innkjopspris != null ? fmtKr(row.innkjopspris) : '—'}
                   </td>
@@ -83,6 +84,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
           <tfoot>
             <tr className="font-bold border-t-2 border-border">
               <td className="px-4 py-3">{totalBiler} biler</td>
+              <td className="px-4 py-3">—</td>
               <td className="px-4 py-3">—</td>
               <td className="px-4 py-3">—</td>
               <td className="px-4 py-3 text-right">{fmtKr(totalBrutto)}</td>

@@ -5,6 +5,22 @@ export function fmtKr(n: number): string {
   return `kr ${Math.round(n).toLocaleString('nb-NO')}`
 }
 
+/** Purchase date as d.m.yy (nb-NO), from YYYY-MM-DD or ISO datetime. */
+export function fmtDatoKjoptShort(raw: string | null | undefined): string {
+  if (raw == null || !String(raw).trim()) return '—'
+  const head = String(raw).trim().slice(0, 10)
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(head)
+  const d = ymd
+    ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
+    : new Date(head)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('nb-NO', {
+    day: 'numeric',
+    month: 'numeric',
+    year: '2-digit',
+  })
+}
+
 /** HH:MM 24h from ISO or date string. */
 export function formatTimeHm(isoOrDate: string): string | null {
   const d = new Date(isoOrDate)
