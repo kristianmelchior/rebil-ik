@@ -317,10 +317,11 @@ export default function FeedTab({ sales, viewerName }: FeedTabProps) {
       })
       const json = (await res.json().catch(() => ({}))) as {
         error?: string
+        detail?: string
         comment?: { id: string; sale_id: number; rep_name: string; body: string; created_at: string }
       }
       if (!res.ok) {
-        throw new Error(json.error ?? `Kommentar feilet (${res.status})`)
+        throw new Error(json.detail ?? json.error ?? `Kommentar feilet (${res.status})`)
       }
       if (!json.comment) {
         throw new Error('Ugyldig svar fra server')
@@ -365,8 +366,13 @@ export default function FeedTab({ sales, viewerName }: FeedTabProps) {
               </div>
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-1">
-                  <p className="text-base font-semibold text-text-primary">
-                    {row.rep_name}
+                  <p className="text-base font-semibold text-text-primary inline-flex items-center gap-1.5 flex-wrap">
+                    <span>{row.rep_name}</span>
+                    {row.prisgrense === 'Pris' ? (
+                      <span className="text-base leading-none" title="Pris" aria-hidden>
+                        🏆
+                      </span>
+                    ) : null}
                   </p>
                   <span className="text-xs text-text-muted shrink-0 tabular-nums">
                     {feedDateTimeRight(row)}
@@ -381,13 +387,9 @@ export default function FeedTab({ sales, viewerName }: FeedTabProps) {
                       className="underline decoration-text-hint underline-offset-[3px] hover:decoration-text-primary"
                     >
                       {title}
-                      {row.prisgrense === 'Pris' ? ' 🏆' : ''}
                     </a>
                   ) : (
-                    <span>
-                      {title}
-                      {row.prisgrense === 'Pris' ? ' 🏆' : ''}
-                    </span>
+                    <span>{title}</span>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-text-secondary pt-1">
@@ -548,8 +550,10 @@ function FeedCommentsSection({
       await onSubmit(saleId, t)
       setDraft('')
       onExpandedChange(true)
-    } catch {
-      setSubmitError('Kunne ikke sende kommentaren. Prøv igjen.')
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : 'Kunne ikke sende kommentaren. Prøv igjen.'
+      )
     } finally {
       setSending(false)
     }

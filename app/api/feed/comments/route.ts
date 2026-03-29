@@ -61,7 +61,8 @@ export async function POST(request: Request) {
         created_at: row.created_at,
       },
     })
-  } catch {
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e)
+    return Response.json({ error: 'Internal server error', detail }, { status: 500 })
   }
 }

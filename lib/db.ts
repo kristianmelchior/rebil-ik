@@ -24,6 +24,30 @@ function supabaseKey(): string {
 
 const supabase = createClient(supabaseUrl(), supabaseKey())
 
+/**
+ * Server-side client for feed_reactions / feed_comments.
+ * Prefer SUPABASE_SERVICE_ROLE_KEY in env so inserts/select-after-insert work even when RLS
+ * on those tables is misconfigured for the anon key (common with PostgREST .single() after insert).
+ */
+let feedSocialClientSingleton: ReturnType<typeof createClient> | null = null
+
+function feedSocialClient() {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+  if (serviceKey) {
+    if (!feedSocialClientSingleton) {
+      feedSocialClientSingleton = createClient(supabaseUrl(), serviceKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      })
+    }
+    return feedSocialClientSingleton
+  }
+  return supabase
+}
+
 const PAGE_SIZE = 1000 // Supabase default cap — we page through all results
 
 // Fetch all rows from a paginated Supabase query.
@@ -156,7 +180,7 @@ export interface FeedReactionRow {
 
 export async function fetchFeedReactionRows(saleIds: number[]): Promise<FeedReactionRow[]> {
   if (saleIds.length === 0) return []
-  const { data, error } = await supabase
+  const { data, error } = await feedSocialClient()
     .from('feed_reactions')
     .select('id,sale_id,kode,rep_name,emoji')
     .in('sale_id', saleIds)
@@ -171,7 +195,8 @@ export async function toggleFeedReaction(
   kode: string,
   repName: string
 ): Promise<'added' | 'removed'> {
-  const { data: existing, error: selErr } = await supabase
+  const db = feedSocialClient()
+  const { data: existing, error: selErr } = await db
     .from('feed_reactions')
     .select('id')
     .eq('sale_id', saleId)
@@ -182,12 +207,12 @@ export async function toggleFeedReaction(
   if (selErr) throw selErr
 
   if (existing) {
-    const { error: delErr } = await supabase.from('feed_reactions').delete().eq('id', existing.id)
+    const { error: delErr } = await db.from('feed_reactions').delete().eq('id', existing.id)
     if (delErr) throw delErr
     return 'removed'
   }
 
-  const { error: insErr } = await supabase.from('feed_reactions').insert({
+  const { error: insErr } = await db.from('feed_reactions').insert({
     sale_id: saleId,
     kode,
     rep_name: repName,
@@ -200,7 +225,7 @@ export async function toggleFeedReaction(
 export interface FeedCommentRow {
   id: string
   sale_id: number
-  kode: string
+  rep_kode: string
   rep_name: string
   body: string
   created_at: string
@@ -208,9 +233,9 @@ export interface FeedCommentRow {
 
 export async function fetchFeedCommentRows(saleIds: number[]): Promise<FeedCommentRow[]> {
   if (saleIds.length === 0) return []
-  const { data, error } = await supabase
+  const { data, error } = await feedSocialClient()
     .from('feed_comments')
-    .select('id,sale_id,kode,rep_name,body,created_at')
+    .select('id,sale_id,rep_kode,rep_name,body,created_at')
     .in('sale_id', saleIds)
     .order('created_at', { ascending: true })
 
@@ -224,12 +249,17 @@ export async function insertFeedComment(
   repName: string,
   body: string
 ): Promise<FeedCommentRow> {
-  const { data, error } = await supabase
+  const { data, error } = await feedSocialClient()
     .from('feed_comments')
-    .insert({ sale_id: saleId, kode, rep_name: repName, body })
-    .select('id,sale_id,kode,rep_name,body,created_at')
-    .single()
+    .insert({ sale_id: saleId, rep_kode: kode, rep_name: repName, body })
+    .select('id,sale_id,rep_kode,rep_name,body,created_at')
 
   if (error) throw error
-  return data as FeedCommentRow
+  const row = data?.[0]
+  if (!row) {
+    throw new Error(
+      'Ingen rad returnert etter lagring. Sjekk at tabellen feed_comments finnes og at RLS tillater insert/select, eller sett SUPABASE_SERVICE_ROLE_KEY for serveren.'
+    )
+  }
+  return row as FeedCommentRow
 }

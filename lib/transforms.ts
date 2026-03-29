@@ -10,6 +10,12 @@ function filterByKode<T extends { kode: string | null }>(rows: T[], kode: string
   return rows.filter(r => r.kode === kode)
 }
 
+/** Exclude unknown placeholder rep from team median (same idea as NPS pipeline). */
+function skipKodeForTeamMedian(kode: string | null | undefined): boolean {
+  if (kode == null || kode === '') return true
+  return kode === 'zz_unknown'
+}
+
 // Filter rows by date range (inclusive) using string comparison.
 // YYYY-MM-DD strings sort lexicographically — no Date parsing needed.
 // Input: rows, dateField (key containing YYYY-MM-DD string), from/to strings
@@ -67,11 +73,17 @@ function computeTeamMedian(
   const leadsInRange = filterByDateRange(allLeadRows, 'createdate', from, to)
   const npsInRange   = filterByDateRange(allNpsRows,  'month',       from, to)
 
-  const kodeSet = new Set<string>([
-    ...salesInRange.map(r => r.kode),
-    ...leadsInRange.map(r => r.kode),
-    ...npsInRange.map(r => r.kode ?? '').filter(k => k !== ''),
-  ])
+  const kodeSet = new Set<string>()
+  for (const r of salesInRange) {
+    if (!skipKodeForTeamMedian(r.kode)) kodeSet.add(r.kode)
+  }
+  for (const r of leadsInRange) {
+    if (!skipKodeForTeamMedian(r.kode)) kodeSet.add(r.kode)
+  }
+  for (const r of npsInRange) {
+    const k = r.kode
+    if (k != null && !skipKodeForTeamMedian(k)) kodeSet.add(k)
+  }
 
   const kodes = Array.from(kodeSet)
   if (kodes.length === 0) {

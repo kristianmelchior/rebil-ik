@@ -15,7 +15,7 @@ create index if not exists feed_reactions_sale_id_idx on public.feed_reactions (
 create table if not exists public.feed_comments (
   id uuid primary key default gen_random_uuid(),
   sale_id integer not null references public.sales (id) on delete cascade,
-  kode text not null,
+  rep_kode text not null,
   rep_name text not null,
   body text not null check (char_length(body) > 0 and char_length(body) <= 2000),
   created_at timestamptz not null default now()
@@ -27,5 +27,12 @@ create index if not exists feed_comments_sale_id_idx on public.feed_comments (sa
 alter table public.feed_reactions enable row level security;
 alter table public.feed_comments enable row level security;
 
+drop policy if exists "feed_reactions_all" on public.feed_reactions;
+drop policy if exists "feed_comments_all" on public.feed_comments;
+
 create policy "feed_reactions_all" on public.feed_reactions for all using (true) with check (true);
 create policy "feed_comments_all" on public.feed_comments for all using (true) with check (true);
+
+-- Optional: server kan bruke SUPABASE_SERVICE_ROLE_KEY i .env for å omgå RLS på disse tabellene.
+grant select, insert, update, delete on public.feed_reactions to anon, authenticated;
+grant select, insert, update, delete on public.feed_comments to anon, authenticated;
