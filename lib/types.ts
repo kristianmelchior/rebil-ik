@@ -9,7 +9,8 @@ export interface SaleRow {
   navn?: string | null          // vehicle / deal label (billiste) — column sales.navn
   kode: string
   teamleder: string
-  dato_kjopt: string           // Supabase returns dates as 'YYYY-MM-DD'
+  dato_kjopt: string           // date or ISO datetime — purchase date for display/filter
+  created_at?: string | null    // optional — used for feed clock when dato_kjopt is date-only
   biler: number                // SUM this — not COUNT(rows)
   innkjopspris: number | null
   prisgruppe: string | null
@@ -102,3 +103,28 @@ export interface RepDashboard {
   lastUpdated: string
   admin?: AdminDashboardMeta
 }
+
+// Boooom! feed — /api/feed/reactions
+export interface FeedReactionGroup {
+  emoji: string
+  count: number
+  repNames: string[]
+}
+
+export interface FeedSaleReactions {
+  reactions: FeedReactionGroup[]
+  myReactions: string[]
+}
+
+export type FeedReactionsMap = Record<string, FeedSaleReactions>
+
+// Boooom! feed — /api/feed/comments (client payload)
+export interface FeedCommentPublic {
+  id: string
+  sale_id: number
+  rep_name: string
+  body: string
+  created_at: string
+}
+
+export type FeedCommentsMap = Record<string, FeedCommentPublic[]>

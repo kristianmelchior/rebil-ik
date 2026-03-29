@@ -3,22 +3,8 @@
 // Rabatt badge driven by prisgrense column. Footer shows totals.
 
 import type { SaleRow } from '@/lib/types'
-
-const HUBSPOT_BASE = 'https://app-eu1.hubspot.com/contacts/25445101/record/0-3'
-
-// Badge config keyed by prisgrense value
-const RABATT_BADGE: Record<string, { label: string; cls: string }> = {
-  'Pris':       { label: 'Ingen rabatt', cls: 'bg-flag-ok-bg text-flag-ok-text'     },
-  'Rabatt 1':   { label: 'Lav rabatt',   cls: 'bg-flag-warn-bg text-flag-warn-text' },
-  'Rabatt 2':   { label: 'Høy rabatt',   cls: 'bg-flag-red-bg text-flag-red-text'   },
-  'Minstepris': { label: 'Minstepris',   cls: 'bg-flag-red-bg text-flag-red-text'   },
-}
-
-// Format currency with Norwegian locale
-// Input: n (number)  Output: "kr X XXX"
-function fmtKr(n: number): string {
-  return `kr ${Math.round(n).toLocaleString('nb-NO')}`
-}
+import { fmtKr } from '@/lib/formatDisplay'
+import { prisgrenseChipClass, HUBSPOT_SALES_DEAL_BASE } from '@/lib/rabattBadge'
 
 interface CarsTableProps {
   sales: SaleRow[]
@@ -41,7 +27,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              {['Bil', 'Type', 'Innkjøpspris', 'Pris', 'Rabatt', 'Bonusbidrag'].map((h, i) => (
+              {['Bil', 'Type', 'Innkjøpspris', 'Pris', 'Prisgrense', 'Bonusbidrag'].map((h, i) => (
                 <th
                   key={h}
                   className={`px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider ${i >= 2 && i !== 4 ? 'text-right' : 'text-left'}`}
@@ -53,22 +39,26 @@ export default function CarsTable({ sales }: CarsTableProps) {
           </thead>
           <tbody>
             {sorted.map(row => {
-              const badge = row.prisgrense ? RABATT_BADGE[row.prisgrense] : null
+              const chipCls = prisgrenseChipClass(row.prisgrense)
               return (
                 <tr key={row.id} className="border-b border-[#F0F0F0] hover:bg-bg">
                   {/* Bil — sales.navn; link to HubSpot deal when hs_deal_id present */}
                   <td className="px-4 py-3 text-text-primary">
                     {row.hs_deal_id ? (
                       <a
-                        href={`${HUBSPOT_BASE}/${row.hs_deal_id}/`}
+                        href={`${HUBSPOT_SALES_DEAL_BASE}/${row.hs_deal_id}/`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="underline decoration-text-hint underline-offset-[3px] hover:decoration-text-primary"
                       >
                         {row.navn?.trim() || `#${row.id}`}
+                        {row.prisgrense === 'Pris' ? ' 🏆' : ''}
                       </a>
                     ) : (
-                      <span>{row.navn?.trim() || `#${row.id}`}</span>
+                      <span>
+                        {row.navn?.trim() || `#${row.id}`}
+                        {row.prisgrense === 'Pris' ? ' 🏆' : ''}
+                      </span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-text-secondary">{row.salgstype}</td>
@@ -77,11 +67,11 @@ export default function CarsTable({ sales }: CarsTableProps) {
                   </td>
                   <td className="px-4 py-3 text-text-primary text-right">{fmtKr(row.brutto)}</td>
                   <td className="px-4 py-3">
-                    {badge && (
-                      <span className={`text-xs font-medium px-2 py-0.5 rounded-pill ${badge.cls}`}>
-                        {badge.label}
+                    {row.prisgrense ? (
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-pill ${chipCls}`}>
+                        {row.prisgrense}
                       </span>
-                    )}
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-text-primary text-right">
                     {row.bonus != null ? fmtKr(row.bonus) : '—'}

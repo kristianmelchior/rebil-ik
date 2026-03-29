@@ -125,3 +125,111 @@ export async function getAllNps(year: number): Promise<NpsRow[]> {
       .range(from, to)
   )
 }
+
+// Recent team sales for Boooom! feed (last N days, biler > 0, not Salgshjelp).
+export async function getRecentSales(days = 7): Promise<SaleRow[]> {
+  const from = new Date()
+  from.setDate(from.getDate() - days)
+  const fromStr = from.toISOString().slice(0, 10)
+
+  return fetchAll<SaleRow>((start, end) =>
+    supabase
+      .from('sales')
+      .select('*')
+      .gte('dato_kjopt', fromStr)
+      .gt('biler', 0)
+      .neq('bonustype', 'Salgshjelp')
+      .order('dato_kjopt', { ascending: false })
+      .range(start, end)
+  )
+}
+
+// --- Boooom! feed social (tables: feed_reactions, feed_comments) ---
+
+export interface FeedReactionRow {
+  id: string
+  sale_id: number
+  kode: string
+  rep_name: string
+  emoji: string
+}
+
+export async function fetchFeedReactionRows(saleIds: number[]): Promise<FeedReactionRow[]> {
+  if (saleIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('feed_reactions')
+    .select('id,sale_id,kode,rep_name,emoji')
+    .in('sale_id', saleIds)
+
+  if (error) throw error
+  return (data ?? []) as FeedReactionRow[]
+}
+
+export async function toggleFeedReaction(
+  saleId: number,
+  emoji: string,
+  kode: string,
+  repName: string
+): Promise<'added' | 'removed'> {
+  const { data: existing, error: selErr } = await supabase
+    .from('feed_reactions')
+    .select('id')
+    .eq('sale_id', saleId)
+    .eq('kode', kode)
+    .eq('emoji', emoji)
+    .maybeSingle()
+
+  if (selErr) throw selErr
+
+  if (existing) {
+    const { error: delErr } = await supabase.from('feed_reactions').delete().eq('id', existing.id)
+    if (delErr) throw delErr
+    return 'removed'
+  }
+
+  const { error: insErr } = await supabase.from('feed_reactions').insert({
+    sale_id: saleId,
+    kode,
+    rep_name: repName,
+    emoji,
+  })
+  if (insErr) throw insErr
+  return 'added'
+}
+
+export interface FeedCommentRow {
+  id: string
+  sale_id: number
+  kode: string
+  rep_name: string
+  body: string
+  created_at: string
+}
+
+export async function fetchFeedCommentRows(saleIds: number[]): Promise<FeedCommentRow[]> {
+  if (saleIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('feed_comments')
+    .select('id,sale_id,kode,rep_name,body,created_at')
+    .in('sale_id', saleIds)
+    .order('created_at', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as FeedCommentRow[]
+}
+
+export async function insertFeedComment(
+  saleId: number,
+  kode: string,
+  repName: string,
+  body: string
+): Promise<FeedCommentRow> {
+  const { data, error } = await supabase
+    .from('feed_comments')
+    .insert({ sale_id: saleId, kode, rep_name: repName, body })
+    .select('id,sale_id,kode,rep_name,body,created_at')
+    .single()
+
+  if (error) throw error
+  return data as FeedCommentRow
+}

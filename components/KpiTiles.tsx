@@ -39,7 +39,7 @@ export default function KpiTiles({
         />
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {/* Biler kjøpt */}
         <div className="bg-surface border border-border rounded-card p-5 text-center">
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Biler kjøpt</p>

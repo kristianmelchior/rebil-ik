@@ -1,18 +1,20 @@
 'use client'
 
-// Entry — loads dashboard when session cookie is valid; otherwise AuthGate.
-// 401 → clears session via /api/auth/logout and shows login.
+// Entry — dashboard + Boooom! feed tab; session cookie or admin.
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import type { RepDashboard } from '@/lib/types'
+import type { RepDashboard, SaleRow } from '@/lib/types'
 import AuthGate from '@/components/AuthGate'
 import KpiTiles from '@/components/KpiTiles'
 import TrendCharts from '@/components/TrendCharts'
 import BonusPanel from '@/components/BonusPanel'
 import CarsTable from '@/components/CarsTable'
+import FeedTab from '@/components/FeedTab'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
+
+const FEED_LAST_SEEN_KEY = 'feed_last_seen'
 
 async function clearSession() {
   await fetch('/api/auth/logout', { method: 'POST', ...fetchOpts })
@@ -23,37 +25,78 @@ async function logOut() {
   window.location.reload()
 }
 
+function maxDatoKjopt(sales: SaleRow[]): string {
+  return sales.reduce((m, s) => (s.dato_kjopt > m ? s.dato_kjopt : m), '')
+}
+
+function computeHasUnread(sales: SaleRow[]): boolean {
+  if (sales.length === 0) return false
+  const lastSeen = localStorage.getItem(FEED_LAST_SEEN_KEY)
+  if (!lastSeen) return true
+  const maxD = maxDatoKjopt(sales)
+  return maxD > lastSeen.slice(0, 10)
+}
+
 export default function Page() {
   const [data,          setData]          = useState<RepDashboard | null>(null)
   const [authed,        setAuthed]        = useState(false)
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('')
+  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'feed'>('dashboard')
+  const [feedSales,     setFeedSales]     = useState<SaleRow[]>([])
+  const [hasUnread,     setHasUnread]     = useState(false)
 
   useEffect(() => {
-    fetch('/api/data', fetchOpts)
-      .then(async res => {
-        if (res.status === 401) {
-          await clearSession()
+    let cancelled = false
+
+    void (async () => {
+      const dataRes = await fetch('/api/data', fetchOpts)
+      if (dataRes.status === 401) {
+        await clearSession()
+        if (!cancelled) setLoading(false)
+        return
+      }
+      if (!dataRes.ok) {
+        if (!cancelled) {
+          setError(true)
           setLoading(false)
-          return null
         }
-        if (!res.ok) throw new Error('fetch failed')
-        return res.json() as Promise<RepDashboard>
-      })
-      .then(json => {
-        if (json) {
-          setData(json)
-          setAuthed(true)
-          setSelectedMonth(new Date().toISOString().slice(0, 7))
+        return
+      }
+
+      const json = (await dataRes.json()) as RepDashboard
+
+      const feedRes = await fetch('/api/feed', fetchOpts)
+      let sales: SaleRow[] = []
+      if (feedRes.ok) {
+        try {
+          sales = (await feedRes.json()) as SaleRow[]
+        } catch {
+          sales = []
         }
-        setLoading(false)
-      })
-      .catch(() => {
-        setError(true)
-        setLoading(false)
-      })
+      }
+
+      if (cancelled) return
+
+      setData(json)
+      setAuthed(true)
+      setSelectedMonth(new Date().toISOString().slice(0, 7))
+      setFeedSales(Array.isArray(sales) ? sales : [])
+      setHasUnread(computeHasUnread(Array.isArray(sales) ? sales : []))
+      setLoading(false)
+    })()
+
+    return () => {
+      cancelled = true
+    }
   }, [])
+
+  function selectFeedTab() {
+    setActiveTab('feed')
+    localStorage.setItem(FEED_LAST_SEEN_KEY, new Date().toISOString())
+    setHasUnread(false)
+  }
 
   if (!loading && !authed && !error) return <AuthGate />
 
@@ -88,6 +131,9 @@ export default function Page() {
   if (!data) return <AuthGate />
 
   const shell = 'max-w-[1100px] mx-auto px-8'
+
+  const tabBtn =
+    'relative py-3.5 mr-7 text-sm font-medium border-b-2 border-transparent text-text-muted hover:text-text-primary'
 
   return (
     <div className="min-h-screen bg-bg">
@@ -139,36 +185,64 @@ export default function Page() {
       </header>
 
       <nav className="bg-surface border-b border-border">
-        <div className={`${shell} flex`}>
-          <span className="text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium">
+        <div className={`${shell} flex items-center`}>
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard')}
+            className={
+              activeTab === 'dashboard'
+                ? 'text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium'
+                : tabBtn
+            }
+          >
             Dashboard
-          </span>
-          <span className="italic text-text-hint py-3.5 text-sm cursor-default">
-            [deepdive]
-          </span>
+          </button>
+          <button
+            type="button"
+            onClick={selectFeedTab}
+            className={
+              activeTab === 'feed'
+                ? 'text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium inline-flex items-center gap-2'
+                : `${tabBtn} inline-flex items-center gap-2`
+            }
+          >
+            Boooom!
+            {hasUnread && (
+              <span
+                className="w-2 h-2 rounded-full bg-[var(--rebil-red)] shrink-0"
+                aria-hidden
+              />
+            )}
+          </button>
         </div>
       </nav>
 
-      <main className={`${shell} py-8 space-y-10`}>
-        <KpiTiles
-          currentMonth={data.currentMonth}
-          last30Days={data.last30Days}
-          medianCurrentMonth={data.medianCurrentMonth}
-          medianLast30Days={data.medianLast30Days}
-        />
-        <TrendCharts
-          trend={data.trend}
-          medianTrend={data.medianTrend}
-        />
-        <BonusPanel
-          bonus={data.bonus}
-          rep={data.rep}
-          salesByMonth={data.salesByMonth}
-          lastUpdated={data.lastUpdated}
-          onMonthChange={setSelectedMonth}
-        />
-        <CarsTable sales={data.salesByMonth[selectedMonth] ?? []} />
-      </main>
+      {activeTab === 'dashboard' ? (
+        <main className={`${shell} py-8 space-y-10`}>
+          <KpiTiles
+            currentMonth={data.currentMonth}
+            last30Days={data.last30Days}
+            medianCurrentMonth={data.medianCurrentMonth}
+            medianLast30Days={data.medianLast30Days}
+          />
+          <TrendCharts
+            trend={data.trend}
+            medianTrend={data.medianTrend}
+          />
+          <BonusPanel
+            bonus={data.bonus}
+            rep={data.rep}
+            salesByMonth={data.salesByMonth}
+            lastUpdated={data.lastUpdated}
+            onMonthChange={setSelectedMonth}
+          />
+          <CarsTable sales={data.salesByMonth[selectedMonth] ?? []} />
+        </main>
+      ) : (
+        <main className={`${shell} py-8`}>
+          <FeedTab sales={feedSales} viewerName={data.rep.full_name} />
+        </main>
+      )}
     </div>
   )
 }
