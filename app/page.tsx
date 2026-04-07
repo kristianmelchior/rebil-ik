@@ -105,23 +105,94 @@ export default function Page() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-bg animate-pulse">
-        {/* Header */}
-        <div className="bg-surface border-b border-border h-[60px] flex items-center px-8">
+      <div className="min-h-screen bg-bg flex flex-col">
+        {/* Header skeleton */}
+        <div className="bg-surface border-b border-border h-[60px] flex items-center px-8 animate-pulse">
           <div className="max-w-[1100px] mx-auto w-full flex items-center justify-between">
             <div className="h-5 w-16 bg-border rounded" />
             <div className="h-8 w-40 bg-border rounded-lg" />
           </div>
         </div>
-        {/* Nav */}
-        <div className="bg-surface border-b border-border">
+        {/* Nav skeleton */}
+        <div className="bg-surface border-b border-border animate-pulse">
           <div className="max-w-[1100px] mx-auto px-8 flex gap-7 py-3.5">
             <div className="h-4 w-20 bg-border rounded" />
             <div className="h-4 w-16 bg-border rounded" />
           </div>
         </div>
-        {/* KPI tiles */}
-        <div className="max-w-[1100px] mx-auto px-8 pt-8">
+
+        {/* Car animation */}
+        <div className="flex-1 flex flex-col items-center justify-center gap-6">
+          <style>{`
+            @keyframes drive {
+              0%   { transform: translateX(-120px); }
+              100% { transform: translateX(120px); }
+            }
+            @keyframes spin-wheel {
+              from { transform-origin: center; transform: rotate(0deg); }
+              to   { transform-origin: center; transform: rotate(360deg); }
+            }
+            .car-drive {
+              animation: drive 1.4s ease-in-out infinite alternate;
+            }
+            .wheel-spin {
+              animation: spin-wheel 0.5s linear infinite;
+            }
+          `}</style>
+
+          <div className="car-drive">
+            <svg width="160" height="80" viewBox="0 0 160 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* Body */}
+              <rect x="10" y="34" width="140" height="28" rx="6" fill="#c0392b" />
+              {/* Roof / cabin */}
+              <path d="M45 34 Q52 14 75 12 L105 12 Q122 12 118 34 Z" fill="#c0392b" />
+              {/* Windshield */}
+              <path d="M52 33 Q57 18 75 16 L100 16 Q113 16 112 33 Z" fill="#a8d8f0" opacity="0.85" />
+              {/* Side windows */}
+              <rect x="54" y="16" width="22" height="17" rx="2" fill="#a8d8f0" opacity="0.85" />
+              {/* Headlight */}
+              <rect x="146" y="42" width="8" height="6" rx="2" fill="#f9e04b" />
+              {/* Taillight */}
+              <rect x="6" y="42" width="8" height="6" rx="2" fill="#e74c3c" />
+              {/* Bumpers */}
+              <rect x="148" y="52" width="8" height="4" rx="2" fill="#999" />
+              <rect x="4" y="52" width="8" height="4" rx="2" fill="#999" />
+              {/* Underside */}
+              <rect x="10" y="58" width="140" height="4" rx="2" fill="#a93226" />
+
+              {/* Rear wheel */}
+              <g transform="translate(38,62)">
+                <circle cx="0" cy="0" r="14" fill="#222" />
+                <circle cx="0" cy="0" r="9" fill="#555" />
+                <g className="wheel-spin">
+                  <line x1="0" y1="-9" x2="0" y2="9" stroke="#888" strokeWidth="2" />
+                  <line x1="-9" y1="0" x2="9" y2="0" stroke="#888" strokeWidth="2" />
+                  <line x1="-6.4" y1="-6.4" x2="6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                  <line x1="6.4" y1="-6.4" x2="-6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                </g>
+                <circle cx="0" cy="0" r="3" fill="#ccc" />
+              </g>
+
+              {/* Front wheel */}
+              <g transform="translate(118,62)">
+                <circle cx="0" cy="0" r="14" fill="#222" />
+                <circle cx="0" cy="0" r="9" fill="#555" />
+                <g className="wheel-spin">
+                  <line x1="0" y1="-9" x2="0" y2="9" stroke="#888" strokeWidth="2" />
+                  <line x1="-9" y1="0" x2="9" y2="0" stroke="#888" strokeWidth="2" />
+                  <line x1="-6.4" y1="-6.4" x2="6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                  <line x1="6.4" y1="-6.4" x2="-6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                </g>
+                <circle cx="0" cy="0" r="3" fill="#ccc" />
+              </g>
+            </svg>
+          </div>
+
+          <p className="text-sm text-text-muted">Laster inn…</p>
+        </div>
+
+        {/* Bottom skeleton tiles */}
+        <div className="max-w-[1100px] mx-auto w-full px-8 pb-8 animate-pulse space-y-4">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[1, 2, 3, 4].map(i => (
               <div key={i} className="bg-surface border border-border rounded-card p-5 space-y-3">
@@ -131,14 +202,6 @@ export default function Page() {
               </div>
             ))}
           </div>
-        </div>
-        {/* Chart */}
-        <div className="max-w-[1100px] mx-auto px-8 pt-8">
-          <div className="bg-surface border border-border rounded-card p-6 h-52" />
-        </div>
-        {/* Bonus panel */}
-        <div className="max-w-[1100px] mx-auto px-8 pt-8">
-          <div className="bg-surface border border-border rounded-card p-6 h-36" />
         </div>
       </div>
     )
