@@ -27,13 +27,15 @@ const AVATAR_PALETTE = [
   'bg-[#1e40af]',
 ]
 
-function hashName(s: string): number {
+function hashName(s: string | null | undefined): number {
+  if (!s) return 0
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
   return Math.abs(h)
 }
 
-function initialsFromRepName(repName: string): string {
+function initialsFromRepName(repName: string | null | undefined): string {
+  if (!repName) return '?'
   const parts = repName.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return '?'
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
@@ -42,7 +44,7 @@ function initialsFromRepName(repName: string): string {
   return (a + b).toUpperCase()
 }
 
-function avatarClass(repName: string): string {
+function avatarClass(repName: string | null | undefined): string {
   return AVATAR_PALETTE[hashName(repName) % AVATAR_PALETTE.length]
 }
 
