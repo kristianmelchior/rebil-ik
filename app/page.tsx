@@ -51,7 +51,11 @@ export default function Page() {
     let cancelled = false
 
     void (async () => {
-      const dataRes = await fetch('/api/data', fetchOpts)
+      const [dataRes, feedRes] = await Promise.all([
+        fetch('/api/data', fetchOpts),
+        fetch('/api/feed', fetchOpts),
+      ])
+
       if (dataRes.status === 401) {
         await clearSession()
         if (!cancelled) setLoading(false)
@@ -67,7 +71,6 @@ export default function Page() {
 
       const json = (await dataRes.json()) as RepDashboard
 
-      const feedRes = await fetch('/api/feed', fetchOpts)
       let sales: SaleRow[] = []
       if (feedRes.ok) {
         try {
@@ -102,11 +105,40 @@ export default function Page() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-bg">
-        <div className="max-w-[1100px] mx-auto px-8 py-8 space-y-6 animate-pulse">
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} className="h-24 bg-border rounded-card" />
-          ))}
+      <div className="min-h-screen bg-bg animate-pulse">
+        {/* Header */}
+        <div className="bg-surface border-b border-border h-[60px] flex items-center px-8">
+          <div className="max-w-[1100px] mx-auto w-full flex items-center justify-between">
+            <div className="h-5 w-16 bg-border rounded" />
+            <div className="h-8 w-40 bg-border rounded-lg" />
+          </div>
+        </div>
+        {/* Nav */}
+        <div className="bg-surface border-b border-border">
+          <div className="max-w-[1100px] mx-auto px-8 flex gap-7 py-3.5">
+            <div className="h-4 w-20 bg-border rounded" />
+            <div className="h-4 w-16 bg-border rounded" />
+          </div>
+        </div>
+        {/* KPI tiles */}
+        <div className="max-w-[1100px] mx-auto px-8 pt-8">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="bg-surface border border-border rounded-card p-5 space-y-3">
+                <div className="h-3 w-24 bg-border rounded" />
+                <div className="h-8 w-16 bg-border rounded" />
+                <div className="h-3 w-20 bg-border rounded" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Chart */}
+        <div className="max-w-[1100px] mx-auto px-8 pt-8">
+          <div className="bg-surface border border-border rounded-card p-6 h-52" />
+        </div>
+        {/* Bonus panel */}
+        <div className="max-w-[1100px] mx-auto px-8 pt-8">
+          <div className="bg-surface border border-border rounded-card p-6 h-36" />
         </div>
       </div>
     )
