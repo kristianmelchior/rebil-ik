@@ -4,13 +4,14 @@
 
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
-import type { RepDashboard, SaleRow } from '@/lib/types'
+import type { RepDashboard, SaleRow, NpsRow } from '@/lib/types'
 import AuthGate from '@/components/AuthGate'
 import KpiTiles from '@/components/KpiTiles'
 import TrendCharts from '@/components/TrendCharts'
 import BonusPanel from '@/components/BonusPanel'
 import CarsTable from '@/components/CarsTable'
 import FeedTab from '@/components/FeedTab'
+import NpsTab from '@/components/NpsTab'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
 
@@ -43,17 +44,19 @@ export default function Page() {
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('')
-  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'feed'>('dashboard')
+  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'feed' | 'nps'>('dashboard')
   const [feedSales,     setFeedSales]     = useState<SaleRow[]>([])
   const [hasUnread,     setHasUnread]     = useState(false)
+  const [npsRows,       setNpsRows]       = useState<NpsRow[]>([])
 
   useEffect(() => {
     let cancelled = false
 
     void (async () => {
-      const [dataRes, feedRes] = await Promise.all([
+      const [dataRes, feedRes, npsRes] = await Promise.all([
         fetch('/api/data', fetchOpts),
         fetch('/api/feed', fetchOpts),
+        fetch('/api/nps', fetchOpts),
       ])
 
       if (dataRes.status === 401) {
@@ -80,6 +83,15 @@ export default function Page() {
         }
       }
 
+      let nps: NpsRow[] = []
+      if (npsRes.ok) {
+        try {
+          nps = (await npsRes.json()) as NpsRow[]
+        } catch {
+          nps = []
+        }
+      }
+
       if (cancelled) return
 
       setData(json)
@@ -87,6 +99,7 @@ export default function Page() {
       setSelectedMonth(new Date().toISOString().slice(0, 7))
       setFeedSales(Array.isArray(sales) ? sales : [])
       setHasUnread(computeHasUnread(Array.isArray(sales) ? sales : []))
+      setNpsRows(Array.isArray(nps) ? nps : [])
       setLoading(false)
     })()
 
@@ -309,10 +322,21 @@ export default function Page() {
               />
             )}
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('nps')}
+            className={
+              activeTab === 'nps'
+                ? 'text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium'
+                : tabBtn
+            }
+          >
+            NPS
+          </button>
         </div>
       </nav>
 
-      {activeTab === 'dashboard' ? (
+      {activeTab === 'dashboard' && (
         <main className={`${shell} py-8 space-y-10`}>
           <KpiTiles
             currentMonth={data.currentMonth}
@@ -333,9 +357,15 @@ export default function Page() {
           />
           <CarsTable sales={data.salesByMonth[selectedMonth] ?? []} />
         </main>
-      ) : (
+      )}
+      {activeTab === 'feed' && (
         <main className={`${shell} py-8`}>
           <FeedTab sales={feedSales} viewerName={data.rep.full_name} />
+        </main>
+      )}
+      {activeTab === 'nps' && (
+        <main className={`${shell} py-8`}>
+          <NpsTab rows={npsRows} />
         </main>
       )}
     </div>

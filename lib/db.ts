@@ -172,6 +172,21 @@ export async function getAllNps(year: number): Promise<NpsRow[]> {
   )
 }
 
+// Fetch NPS rows for a single rep by kode, full year, sorted by submitted_at desc.
+// Input: kode (string), year (number)  Output: NpsRow[]
+export async function getNpsByKode(kode: string, year: number): Promise<NpsRow[]> {
+  return fetchAll<NpsRow>((from, to) =>
+    supabase
+      .from('nps')
+      .select('*')
+      .eq('kode', kode)
+      .gte('month', `${year}-01-01`)
+      .lte('month', `${year}-12-31`)
+      .order('submitted_at', { ascending: false })
+      .range(from, to)
+  )
+}
+
 // Recent team sales for Boooom! feed (last N days, biler > 0, not Salgshjelp).
 export async function getRecentSales(days = 7): Promise<SaleRow[]> {
   const from = new Date()

@@ -69,9 +69,9 @@ function computeTeamMedian(
   from: string,
   to: string
 ): PeriodMetrics {
-  const salesInRange = filterByDateRange(allSaleRows, 'dato_kjopt', from, to)
-  const leadsInRange = filterByDateRange(allLeadRows, 'createdate', from, to)
-  const npsInRange   = filterByDateRange(allNpsRows,  'month',       from, to)
+  const salesInRange = filterByDateRange(allSaleRows, 'dato_kjopt',   from, to)
+  const leadsInRange = filterByDateRange(allLeadRows, 'createdate',   from, to)
+  const npsInRange   = filterByDateRange(allNpsRows,  'submitted_at', from, to)
 
   const kodeSet = new Set<string>()
   for (const r of salesInRange) {
@@ -174,14 +174,14 @@ export function buildDashboard(
   const repNps   = filterByKode(allNps,   rep.kode)
 
   // Current-month slices
-  const repSalesMonth = filterByDateRange(repSales, 'dato_kjopt', currentMonthStart, todayStr)
-  const repLeadsMonth = filterByDateRange(repLeads, 'createdate', currentMonthStart, todayStr)
-  const repNpsMonth   = filterByDateRange(repNps,   'month',      currentMonthStart, todayStr)
+  const repSalesMonth = filterByDateRange(repSales, 'dato_kjopt',   currentMonthStart, todayStr)
+  const repLeadsMonth = filterByDateRange(repLeads, 'createdate',   currentMonthStart, todayStr)
+  const repNpsMonth   = filterByDateRange(repNps,   'submitted_at', currentMonthStart, todayStr)
 
   // Last-30-day slices
-  const repSales30 = filterByDateRange(repSales, 'dato_kjopt', last30Start, todayStr)
-  const repLeads30 = filterByDateRange(repLeads, 'createdate', last30Start, todayStr)
-  const repNps30   = filterByDateRange(repNps,   'month',      last30Start, todayStr)
+  const repSales30 = filterByDateRange(repSales, 'dato_kjopt',   last30Start, todayStr)
+  const repLeads30 = filterByDateRange(repLeads, 'createdate',   last30Start, todayStr)
+  const repNps30   = filterByDateRange(repNps,   'submitted_at', last30Start, todayStr)
 
   // Group all rep sales by 'YYYY-MM' key for the BonusPanel month selector
   const salesByMonth: Record<string, SaleRow[]> = {}
