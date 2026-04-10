@@ -194,7 +194,7 @@ export default function BonusPanel({
           <span className="text-text-primary">{fmtKr(displayKonverteringsbonus)}</span>
         </div>
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
-          <span className="text-text-secondary">NPS-bonus</span>
+          <span className="text-text-secondary">NPS-bonus (minst 10 biler)</span>
           <span className="text-text-primary">{fmtKr(displayNpsBonus)}</span>
         </div>
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
