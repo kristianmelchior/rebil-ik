@@ -102,6 +102,23 @@ function deriveTier(rolle: string): 'IK' | 'Senior' | 'Spesialist' {
   return 'IK'
 }
 
+// Fetch a single rep by email. Returns null if not found.
+// Input: email (string)  Output: Rep | null
+export async function getRepByEmail(email: string): Promise<Rep | null> {
+  const { data, error } = await supabase
+    .from('reps')
+    .select('*')
+    .eq('email', email.toLowerCase().trim())
+    .single()
+
+  if (error) {
+    if (error.code === 'PGRST116') return null
+    throw error
+  }
+
+  return { ...data, tier: deriveTier(data.rolle) } as Rep
+}
+
 // Fetch a single rep by kode. Returns null if not found.
 // Input: kode (rep UUID string)  Output: Rep | null
 export async function getRepByKode(kode: string): Promise<Rep | null> {
@@ -117,6 +134,19 @@ export async function getRepByKode(kode: string): Promise<Rep | null> {
   }
 
   return { ...data, tier: deriveTier(data.rolle) } as Rep
+}
+
+// Fetch team members for a teamleder — reps where teamleder = name, sorted by name.
+// Input: teamlederName (string)  Output: { kode, full_name }[]
+export async function getTeamMembers(teamlederName: string): Promise<{ kode: string; full_name: string }[]> {
+  const { data, error } = await supabase
+    .from('reps')
+    .select('kode, full_name')
+    .eq('teamleder', teamlederName)
+    .order('full_name')
+
+  if (error) throw error
+  return (data ?? []) as { kode: string; full_name: string }[]
 }
 
 // All reps for admin picker — kode + full_name only, sorted by name.

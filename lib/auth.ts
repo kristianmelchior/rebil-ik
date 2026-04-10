@@ -6,6 +6,15 @@ export const SESSION_COOKIE_NAME = 'rebil_rep_session'
 export const ADMIN_SESSION_COOKIE_NAME = 'rebil_admin'
 export const ADMIN_VIEW_KODE_COOKIE_NAME = 'rebil_admin_view'
 
+/** Teamleder mode: set when a teamleder views a team member's dashboard. */
+export const TEAM_VIEW_KODE_COOKIE_NAME = 'rebil_team_view'
+
+/** Roles that get the team picker. */
+export const TEAMLEDER_ROLES = ['Teamleder m leads', 'Teamleder u leads'] as const
+export function isTeamleder(rolle: string): boolean {
+  return (TEAMLEDER_ROLES as readonly string[]).includes(rolle)
+}
+
 /** Canonical admin password (Norwegian å). */
 export const ADMIN_PASSWORD = 'bilerogbåter'
 

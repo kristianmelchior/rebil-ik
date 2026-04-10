@@ -273,7 +273,30 @@ export default function Page() {
                     <option key={r.kode} value={r.kode}>{r.full_name}</option>
                   ))}
                 </select>
-                <span className="text-sm text-text-muted shrink-0 hidden md:inline">{data.rep.tier}</span>
+                <span className="text-sm text-text-muted shrink-0">{data.rep.rolle}</span>
+              </>
+            ) : data.teamView ? (
+              <>
+                <select
+                  value={data.rep.kode}
+                  onChange={async e => {
+                    const next = e.target.value
+                    const res = await fetch('/api/auth/team-view', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ kode: next }),
+                      ...fetchOpts,
+                    })
+                    if (res.ok) window.location.reload()
+                  }}
+                  className="min-w-0 max-w-[min(100%,280px)] text-sm font-medium text-text-primary border border-border rounded-lg px-3 py-2 bg-surface focus:border-[var(--rebil-red)] outline-none cursor-pointer"
+                  aria-label="Velg teammedlem"
+                >
+                  {data.teamView.reps.map(r => (
+                    <option key={r.kode} value={r.kode}>{r.full_name}</option>
+                  ))}
+                </select>
+                <span className="text-sm text-text-muted shrink-0">{data.rep.rolle}</span>
               </>
             ) : (
               <div className="flex items-baseline gap-1.5 min-w-0 justify-end text-right">

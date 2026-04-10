@@ -29,9 +29,9 @@ function fmtKr(n: number): string {
   return `kr ${Math.round(n).toLocaleString('nb-NO')}`
 }
 
-/** One decimal for konvertering % input (matches display rules). */
-function roundConvOneDecimal(n: number): number {
-  return Math.round(n * 10) / 10
+/** Round to nearest 0.5 — matches the factor table step size. */
+function roundConvHalfStep(n: number): number {
+  return Math.round(n * 2) / 2
 }
 
 // Look up conversion factor — same logic as lib/bonus.ts but client-side for what-if
@@ -78,13 +78,13 @@ export default function BonusPanel({
   const months = Object.keys(salesByMonth).sort((a, b) => b.localeCompare(a))
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey)
-  const [simConvRate,   setSimConvRate]   = useState(() => roundConvOneDecimal(bonus.convRate))
+  const [simConvRate,   setSimConvRate]   = useState(() => roundConvHalfStep(bonus.convRate))
   const [simNpsScore,   setSimNpsScore]   = useState(bonus.npsScore ?? 40)
 
   // Re-sync from server when selecting inneværende måned (e.g. after viewing a past month)
   useEffect(() => {
     if (selectedMonth !== currentMonthKey) return
-    setSimConvRate(roundConvOneDecimal(bonus.convRate))
+    setSimConvRate(roundConvHalfStep(bonus.convRate))
     setSimNpsScore(bonus.npsScore ?? 40)
   }, [selectedMonth, currentMonthKey, bonus])
 
@@ -107,10 +107,17 @@ export default function BonusPanel({
     day: 'numeric', month: 'long', year: 'numeric',
   })
 
-  // Display values — use what-if sim for current month, server data for past months
-  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : bonus.konverteringsbonus
-  const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : bonus.npsBonus
-  const displayTotal              = isCurrentMonth ? simTotalBonus         : bonus.totalBonus
+  // For past months: derive baseBonus and car count directly from salesByMonth rows
+  const pastSales       = salesByMonth[selectedMonth] ?? []
+  const pastBaseBonus   = pastSales.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
+  const pastCarsCount   = pastSales.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
+
+  // Display values — use what-if sim for current month, derived past data for other months
+  const displayBaseBonus          = isCurrentMonth ? bonus.baseBonus          : pastBaseBonus
+  const displayCarsCount          = isCurrentMonth ? bonus.carsThisMonth      : pastCarsCount
+  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus    : 0
+  const displayNpsBonus           = isCurrentMonth ? simNpsBonus              : 0
+  const displayTotal              = isCurrentMonth ? simTotalBonus            : pastBaseBonus
 
   return (
     <section>
@@ -141,13 +148,13 @@ export default function BonusPanel({
               <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Konvertering</p>
               <input
                 type="number"
-                step={0.1}
-                min={1}
-                max={20}
+                step={0.5}
+                min={0.5}
+                max={25}
                 value={simConvRate}
                 onChange={e => {
                   const v = parseFloat(e.target.value)
-                  setSimConvRate(Number.isNaN(v) ? 0 : roundConvOneDecimal(v))
+                  setSimConvRate(Number.isNaN(v) ? 0 : roundConvHalfStep(v))
                 }}
                 className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none"
               />
@@ -179,8 +186,8 @@ export default function BonusPanel({
       {/* Bonus breakdown card */}
       <div className="bg-surface border border-border rounded-card p-5">
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
-          <span className="text-text-secondary">Bonus biler ({bonus.carsThisMonth} biler)</span>
-          <span className="text-text-primary">{fmtKr(bonus.baseBonus)}</span>
+          <span className="text-text-secondary">Bonus biler ({displayCarsCount} biler)</span>
+          <span className="text-text-primary">{fmtKr(displayBaseBonus)}</span>
         </div>
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
           <span className="text-text-secondary">Konverteringsbonus</span>

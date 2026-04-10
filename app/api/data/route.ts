@@ -7,12 +7,15 @@ import {
   getAllLeads,
   getAllNps,
   getAllRepsForPicker,
+  getTeamMembers,
 } from '@/lib/db'
 import { buildDashboard } from '@/lib/transforms'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   ADMIN_VIEW_KODE_COOKIE_NAME,
+  TEAM_VIEW_KODE_COOKIE_NAME,
+  isTeamleder,
 } from '@/lib/auth'
 
 export async function GET() {
@@ -20,6 +23,7 @@ export async function GET() {
   const isAdmin = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value === '1'
   const adminViewKode = cookieStore.get(ADMIN_VIEW_KODE_COOKIE_NAME)?.value
   const repSessionKode = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  const teamViewKode = cookieStore.get(TEAM_VIEW_KODE_COOKIE_NAME)?.value
 
   const kode = isAdmin ? adminViewKode : repSessionKode
 
@@ -28,14 +32,29 @@ export async function GET() {
   }
 
   try {
-    const rep = await getRepByKode(kode)
-    if (!rep) {
+    // Determine which rep's data to show
+    const sessionRep = await getRepByKode(kode)
+    if (!sessionRep) {
       if (isAdmin) {
         cookieStore.delete(ADMIN_VIEW_KODE_COOKIE_NAME)
       } else {
         cookieStore.delete(SESSION_COOKIE_NAME)
       }
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const repIsTeamleder = isTeamleder(sessionRep.rolle)
+
+    // Teamleder viewing a team member — validate the target is on their team
+    let rep = sessionRep
+    if (!isAdmin && repIsTeamleder && teamViewKode) {
+      const targetRep = await getRepByKode(teamViewKode)
+      if (targetRep && targetRep.teamleder === sessionRep.full_name) {
+        rep = targetRep
+      } else {
+        // Invalid target — clear the cookie and show teamleder's own data
+        cookieStore.delete(TEAM_VIEW_KODE_COOKIE_NAME)
+      }
     }
 
     const year = new Date().getFullYear()
@@ -51,6 +70,14 @@ export async function GET() {
       const reps = await getAllRepsForPicker()
       return Response.json(
         { ...dashboard, admin: { reps } },
+        { headers: { 'Cache-Control': 'no-store' } }
+      )
+    }
+
+    if (repIsTeamleder) {
+      const teamReps = await getTeamMembers(sessionRep.full_name)
+      return Response.json(
+        { ...dashboard, teamView: { reps: teamReps } },
         { headers: { 'Cache-Control': 'no-store' } }
       )
     }

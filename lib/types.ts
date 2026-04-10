@@ -88,6 +88,11 @@ export interface AdminDashboardMeta {
   reps: { kode: string; full_name: string }[]
 }
 
+/** Present when logged in as teamleder — team picker in header. */
+export interface TeamlederDashboardMeta {
+  reps: { kode: string; full_name: string }[]
+}
+
 // Full dashboard payload — returned by GET /api/data
 export interface RepDashboard {
   rep: Rep
@@ -102,6 +107,7 @@ export interface RepDashboard {
   salesByMonth: Record<string, SaleRow[]>             // key = 'YYYY-MM'
   lastUpdated: string
   admin?: AdminDashboardMeta
+  teamView?: TeamlederDashboardMeta
 }
 
 // Boooom! feed — /api/feed/reactions
