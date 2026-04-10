@@ -3,13 +3,20 @@
 // Login — Google SSO or admin password.
 
 import Image from 'next/image'
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
 
 export default function AuthGate() {
   const [googleLoading, setGoogleLoading] = useState(false)
+  const [googleError, setGoogleError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search)
+    const err = p.get('auth_error')
+    if (err) setGoogleError(decodeURIComponent(err))
+  }, [])
 
   const [showAdmin,     setShowAdmin]     = useState(false)
   const [adminPass,     setAdminPass]     = useState('')
@@ -80,6 +87,9 @@ export default function AuthGate() {
           </svg>
           {googleLoading ? 'Videresender…' : 'Logg inn med Google'}
         </button>
+        {googleError && (
+          <p className="text-sm text-[var(--rebil-red)] mt-2 text-center">{googleError}</p>
+        )}
 
         <div className="mt-8 pt-6 border-t border-border">
           <button
