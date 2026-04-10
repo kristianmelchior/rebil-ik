@@ -1,32 +1,33 @@
 'use client'
 
-// OAuth callback page — Supabase auto-processes the #access_token hash from
-// implicit flow, then we call /api/auth/google-complete to set the rep session cookie.
+// OAuth callback page — exchanges Supabase PKCE auth code for session,
+// then calls /api/auth/google-complete to set the rep session cookie.
 
 import { Suspense, useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
-
-function createSupabaseClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+import { useSearchParams } from 'next/navigation'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 function CallbackHandler() {
+  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function handleCallback() {
-      const supabase = createSupabaseClient()
+      const code = searchParams.get('code')
+      if (!code) {
+        // No code in URL — might be an error param from the provider
+        const errDesc = searchParams.get('error_description') ?? searchParams.get('error')
+        setError(errDesc ?? 'Ingen innloggingskode i URL. Prøv igjen.')
+        return
+      }
 
-      // Supabase automatically parses #access_token=... from the URL hash on init.
-      // getSession() returns the session that was embedded in the hash fragment.
-      const { data, error: sessionError } = await supabase.auth.getSession()
+      const supabase = getSupabaseBrowserClient()
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
-      if (sessionError || !data.session?.access_token) {
-        console.error('[callback] getSession failed:', sessionError?.message ?? 'no session')
-        setError('Kunne ikke fullføre innlogging. Prøv igjen.')
+      if (exchangeError || !data.session?.access_token) {
+        const msg = exchangeError?.message ?? 'Ingen sesjon returnert'
+        console.error('[callback] exchangeCodeForSession failed:', msg)
+        setError(`Kunne ikke fullføre innlogging: ${msg}`)
         return
       }
 
@@ -42,12 +43,13 @@ function CallbackHandler() {
       } else if (res.status === 403) {
         setError('Denne Google-kontoen er ikke registrert som Rebil-ansatt.')
       } else {
-        setError('Noe gikk galt. Prøv igjen.')
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        setError(`Innlogging feilet (${res.status}): ${body.error ?? 'ukjent feil'}`)
       }
     }
 
     void handleCallback()
-  }, [])
+  }, [searchParams])
 
   if (error) {
     return (
