@@ -1,11 +1,9 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 // OAuth callback page — exchanges Supabase auth code for session,
 // then calls /api/auth/google-complete to set the rep session cookie.
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
@@ -16,7 +14,7 @@ function createSupabaseClient() {
   )
 }
 
-export default function AuthCallback() {
+function CallbackHandler() {
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
@@ -57,23 +55,27 @@ export default function AuthCallback() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-bg flex items-center justify-center">
-        <div className="text-center max-w-sm px-4">
-          <p className="text-text-secondary mb-4">{error}</p>
-          <a
-            href="/"
-            className="inline-block px-6 h-10 leading-10 rounded-pill bg-brand-green text-white text-sm font-medium hover:bg-brand-green-hover"
-          >
-            Tilbake til innlogging
-          </a>
-        </div>
+      <div className="text-center max-w-sm px-4">
+        <p className="text-text-secondary mb-4">{error}</p>
+        <a
+          href="/"
+          className="inline-block px-6 h-10 leading-10 rounded-pill bg-brand-green text-white text-sm font-medium hover:bg-brand-green-hover"
+        >
+          Tilbake til innlogging
+        </a>
       </div>
     )
   }
 
+  return <p className="text-text-secondary text-sm">Logger inn…</p>
+}
+
+export default function AuthCallback() {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
-      <p className="text-text-secondary text-sm">Logger inn…</p>
+      <Suspense fallback={<p className="text-text-secondary text-sm">Logger inn…</p>}>
+        <CallbackHandler />
+      </Suspense>
     </div>
   )
 }
