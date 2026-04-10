@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 // OAuth callback page — exchanges Supabase auth code for session,
 // then calls /api/auth/google-complete to set the rep session cookie.
 
