@@ -1,36 +1,31 @@
 'use client'
 
-// OAuth callback page — exchanges Supabase auth code for session,
-// then calls /api/auth/google-complete to set the rep session cookie.
+// OAuth callback page — Supabase auto-processes the #access_token hash from
+// implicit flow, then we call /api/auth/google-complete to set the rep session cookie.
 
 import { Suspense, useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 import { createClient } from '@supabase/supabase-js'
 
 function createSupabaseClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { flowType: 'pkce' } }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 }
 
 function CallbackHandler() {
-  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function handleCallback() {
-      const code = searchParams.get('code')
-      if (!code) {
-        window.location.href = '/'
-        return
-      }
-
       const supabase = createSupabaseClient()
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
-      if (exchangeError || !data.session?.access_token) {
+      // Supabase automatically parses #access_token=... from the URL hash on init.
+      // getSession() returns the session that was embedded in the hash fragment.
+      const { data, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError || !data.session?.access_token) {
+        console.error('[callback] getSession failed:', sessionError?.message ?? 'no session')
         setError('Kunne ikke fullføre innlogging. Prøv igjen.')
         return
       }
@@ -52,7 +47,7 @@ function CallbackHandler() {
     }
 
     void handleCallback()
-  }, [searchParams])
+  }, [])
 
   if (error) {
     return (
