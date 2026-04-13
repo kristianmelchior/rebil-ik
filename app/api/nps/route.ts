@@ -6,6 +6,7 @@ import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   ADMIN_VIEW_KODE_COOKIE_NAME,
+  TEAM_VIEW_KODE_COOKIE_NAME,
 } from '@/lib/auth'
 
 export async function GET() {
@@ -13,8 +14,11 @@ export async function GET() {
   const isAdmin = cookieStore.get(ADMIN_SESSION_COOKIE_NAME)?.value === '1'
   const adminViewKode = cookieStore.get(ADMIN_VIEW_KODE_COOKIE_NAME)?.value
   const repSessionKode = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  const teamViewKode = cookieStore.get(TEAM_VIEW_KODE_COOKIE_NAME)?.value
 
-  const kode = isAdmin ? adminViewKode : repSessionKode
+  const kode = isAdmin
+    ? adminViewKode
+    : (teamViewKode ?? repSessionKode)
 
   if (!kode) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
