@@ -233,7 +233,7 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
                   fill="#fff"
                   fontSize={11}
                   fontWeight={600}
-                  formatter={(v: number) => v > 0 ? `${Math.round(v)}%` : ''}
+                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? `${Math.round(v)}%` : ''}
                 />
               </Bar>
               <Bar dataKey="rabatt1"    stackId="a" fill={PRIS_COLORS.rabatt1}    stroke={STROKE_COLOR} strokeWidth={0.5} />
@@ -263,7 +263,7 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
                   fill="#fff"
                   fontSize={11}
                   fontWeight={600}
-                  formatter={(v: number) => v > 0 ? `${Math.round(v)}%` : ''}
+                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? `${Math.round(v)}%` : ''}
                 />
               </Bar>
               <Bar dataKey="kommisjon"  stackId="a" fill={FORD_COLORS.kommisjon}   stroke={STROKE_COLOR} strokeWidth={0.5} />
