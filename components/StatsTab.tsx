@@ -72,12 +72,13 @@ function condStyle(
   const activeRows = rows.filter(r => r.bilerKjopt > 0)
   const vals = activeRows.map(r => r[key] as number | null).filter((v): v is number => v !== null)
   if (vals.length < 3) return {}
-  const min = Math.min(...vals)
-  const max = Math.max(...vals)
-  if (min === max) return {}
-  const norm = (value - min) / (max - min)
-  if (norm >= 0.75) return { color: '#16a34a' }
-  if (norm <= 0.25) return { color: '#dc2626' }
+  const sorted = [...vals].sort((a, b) => a - b)
+  const n = sorted.length
+  const cutLow  = sorted[Math.floor((n - 1) * 0.20)]
+  const cutHigh = sorted[Math.floor((n - 1) * 0.80)]
+  if (cutLow === cutHigh) return {}
+  if (value >= cutHigh) return { color: '#16a34a' }
+  if (value <= cutLow)  return { color: '#dc2626' }
   return {}
 }
 
