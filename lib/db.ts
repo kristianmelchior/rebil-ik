@@ -149,6 +149,16 @@ export async function getTeamMembers(teamlederName: string): Promise<{ kode: str
   return (data ?? []) as { kode: string; full_name: string }[]
 }
 
+// All reps with teamleder info — for stats table.
+export async function getAllRepsWithDetails(): Promise<{ kode: string; full_name: string; teamleder: string }[]> {
+  const { data, error } = await supabase
+    .from('reps')
+    .select('kode, full_name, teamleder')
+    .order('full_name')
+  if (error) throw error
+  return (data ?? []) as { kode: string; full_name: string; teamleder: string }[]
+}
+
 // All reps for admin picker — kode + full_name only, sorted by name.
 export async function getAllRepsForPicker(): Promise<{ kode: string; full_name: string }[]> {
   const { data, error } = await supabase

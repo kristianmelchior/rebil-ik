@@ -8,10 +8,14 @@ import type { RepDashboard, SaleRow, NpsRow } from '@/lib/types'
 import AuthGate from '@/components/AuthGate'
 import KpiTiles from '@/components/KpiTiles'
 import TrendCharts from '@/components/TrendCharts'
+import InsightTiles from '@/components/InsightTiles'
+import { buildPrisSlices } from '@/components/BreakdownTile'
 import BonusPanel from '@/components/BonusPanel'
 import CarsTable from '@/components/CarsTable'
 import FeedTab from '@/components/FeedTab'
 import NpsTab from '@/components/NpsTab'
+import ToplistTab from '@/components/ToplistTab'
+import StatsTab from '@/components/StatsTab'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
 
@@ -44,7 +48,8 @@ export default function Page() {
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState(false)
   const [selectedMonth, setSelectedMonth] = useState('')
-  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'feed' | 'nps'>('dashboard')
+  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'toplist' | 'feed' | 'nps' | 'stats'>('dashboard')
+  const [period,        setPeriod]        = useState<'month' | '30d'>('30d')
   const [feedSales,     setFeedSales]     = useState<SaleRow[]>([])
   const [hasUnread,     setHasUnread]     = useState(false)
   const [npsRows,       setNpsRows]       = useState<NpsRow[]>([])
@@ -238,6 +243,10 @@ export default function Page() {
 
   if (!data) return <AuthGate />
 
+  const metrics    = period === 'month' ? data.currentMonth  : data.last30Days
+  const curSales   = period === 'month' ? data.salesThisMonth : data.salesLast30Days
+  const prisSlices = buildPrisSlices(curSales)
+
   const shell = 'max-w-[1100px] mx-auto px-8'
 
   const tabBtn =
@@ -316,7 +325,7 @@ export default function Page() {
       </header>
 
       <nav className="bg-surface border-b border-border">
-        <div className={`${shell} flex items-center`}>
+        <div className={`${shell} flex items-center justify-between`}>
           <button
             type="button"
             onClick={() => setActiveTab('dashboard')}
@@ -327,6 +336,17 @@ export default function Page() {
             }
           >
             Dashboard
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('toplist')}
+            className={
+              activeTab === 'toplist'
+                ? 'text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium'
+                : tabBtn
+            }
+          >
+            Toppliste
           </button>
           <button
             type="button"
@@ -356,6 +376,21 @@ export default function Page() {
           >
             NPS
           </button>
+
+          {/* Se stats — admin/teamleder only, pushed to the right */}
+          {(data.admin || data.teamView) && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('stats')}
+              className={`ml-auto my-2 text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${
+                activeTab === 'stats'
+                  ? 'bg-[var(--rebil-red)] text-white'
+                  : 'bg-text-primary text-white hover:opacity-80'
+              }`}
+            >
+              Se stats
+            </button>
+          )}
         </div>
       </nav>
 
@@ -364,12 +399,21 @@ export default function Page() {
           <KpiTiles
             currentMonth={data.currentMonth}
             last30Days={data.last30Days}
-            medianCurrentMonth={data.medianCurrentMonth}
-            medianLast30Days={data.medianLast30Days}
+            period={period}
+            onPeriodChange={setPeriod}
+            prisSlices={prisSlices}
+          />
+          <InsightTiles
+            period={period}
+            salesThisMonth={data.salesThisMonth}
+            salesLast30Days={data.salesLast30Days}
+            leads={metrics.leads}
           />
           <TrendCharts
             trend={data.trend}
             medianTrend={data.medianTrend}
+            prisDistTrend={data.prisDistTrend}
+            fordDistTrend={data.fordDistTrend}
           />
           <BonusPanel
             bonus={data.bonus}
@@ -381,6 +425,11 @@ export default function Page() {
           <CarsTable sales={data.salesByMonth[selectedMonth] ?? []} />
         </main>
       )}
+      {activeTab === 'toplist' && (
+        <main className={`${shell} py-8`}>
+          <ToplistTab />
+        </main>
+      )}
       {activeTab === 'feed' && (
         <main className={`${shell} py-8`}>
           <FeedTab sales={feedSales} viewerName={data.rep.full_name} />
@@ -389,6 +438,11 @@ export default function Page() {
       {activeTab === 'nps' && (
         <main className={`${shell} py-8`}>
           <NpsTab rows={npsRows} />
+        </main>
+      )}
+      {activeTab === 'stats' && (data.admin || data.teamView) && (
+        <main className={`${shell} py-8`}>
+          <StatsTab />
         </main>
       )}
     </div>

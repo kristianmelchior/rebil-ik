@@ -44,6 +44,7 @@ export interface NpsRow {
   rep_name: string
   kode: string | null          // filter out null and 'zz_unknown'
   teamleder: string
+  svar?: string | null         // free-text survey response
 }
 
 // Row from public.reps
@@ -93,6 +94,21 @@ export interface TeamlederDashboardMeta {
   reps: { kode: string; full_name: string }[]
 }
 
+export interface PrisDistPoint {
+  month: string
+  pris: number       // share 0–1
+  rabatt1: number
+  rabatt2: number
+  minstepris: number
+}
+
+export interface FordDistPoint {
+  month: string
+  fastpris: number   // share 0–1
+  kommisjon: number
+  salgshjelp: number
+}
+
 // Full dashboard payload — returned by GET /api/data
 export interface RepDashboard {
   rep: Rep
@@ -104,7 +120,12 @@ export interface RepDashboard {
   medianTrend: (PeriodMetrics & { month: string })[]
   bonus: BonusResult
   salesThisMonth: SaleRow[]
+  salesLast30Days: SaleRow[]
+  medianPrisPctMonth: number | null
+  medianPrisPct30: number | null
   salesByMonth: Record<string, SaleRow[]>             // key = 'YYYY-MM'
+  prisDistTrend: PrisDistPoint[]
+  fordDistTrend: FordDistPoint[]
   lastUpdated: string
   admin?: AdminDashboardMeta
   teamView?: TeamlederDashboardMeta

@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, LeadRow, NpsRow, Rep, PeriodMetrics, RepDashboard } from './types'
+import type { SaleRow, LeadRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -56,6 +56,45 @@ function median(values: number[]): number | null {
   return sorted.length % 2 === 0
     ? (sorted[mid - 1] + sorted[mid]) / 2
     : sorted[mid]
+}
+
+// Compute the p-th percentile (0–100) of a numeric array using linear interpolation.
+function percentile(values: number[], p: number): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const idx = (p / 100) * (sorted.length - 1)
+  const lo = Math.floor(idx)
+  const hi = Math.ceil(idx)
+  return lo === hi ? sorted[lo] : sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
+}
+
+const PRIS_CATS_SET = new Set(['Pris', 'Rabattnivå 1', 'Rabattnivå 2', 'Minstepris'])
+
+// Compute team median Pris% (share of "Pris" out of biler with a known prisgrense).
+// One data point per rep with a defined kode; excludes reps with zero qualifying biler.
+function computeMedianPrisPct(allSaleRows: SaleRow[], from: string, to: string): number | null {
+  const periodSales = filterByDateRange(allSaleRows, 'dato_kjopt', from, to)
+  const repMap = new Map<string, { pris: number; total: number }>()
+
+  for (const s of periodSales) {
+    if (skipKodeForTeamMedian(s.kode)) continue
+    const biler = Number(s.biler)
+    if (!biler || biler <= 0 || isNaN(biler)) continue
+    // Only count rows with a recognised prisgrense (skips Kommisjon/null rows)
+    if (!s.prisgrense || !PRIS_CATS_SET.has(s.prisgrense)) continue
+
+    if (!repMap.has(s.kode!)) repMap.set(s.kode!, { pris: 0, total: 0 })
+    const r = repMap.get(s.kode!)!
+    r.total += biler
+    if (s.prisgrense === 'Pris') r.pris += biler
+  }
+
+  const pcts = [...repMap.values()]
+    .filter(r => r.total > 0)
+    .map(r => r.pris / r.total)
+    .filter(p => isFinite(p) && !isNaN(p))
+
+  return percentile(pcts, 80)
 }
 
 // Compute team-wide PeriodMetrics median for a date range.
@@ -147,6 +186,49 @@ function buildMedianTrend(
   }))
 }
 
+// Build per-rep monthly pris-distribution trend (shares 0–1) for all 12 months.
+function buildPrisDistTrend(saleRows: SaleRow[], year: number): PrisDistPoint[] {
+  return buildYearMonthKeys(year).map(ym => {
+    const rows = filterByDateRange(saleRows, 'dato_kjopt', `${ym}-01`, `${ym}-31`)
+    let pris = 0, rabatt1 = 0, rabatt2 = 0, minstepris = 0
+    for (const s of rows) {
+      const b = s.biler ?? 0
+      if (b <= 0 || !s.prisgrense) continue
+      switch (s.prisgrense) {
+        case 'Pris':         pris      += b; break
+        case 'Rabattnivå 1': rabatt1   += b; break
+        case 'Rabattnivå 2': rabatt2   += b; break
+        case 'Minstepris':   minstepris += b; break
+      }
+    }
+    const total = pris + rabatt1 + rabatt2 + minstepris
+    if (total === 0) return { month: ym, pris: 0, rabatt1: 0, rabatt2: 0, minstepris: 0 }
+    return { month: ym, pris: pris/total, rabatt1: rabatt1/total, rabatt2: rabatt2/total, minstepris: minstepris/total }
+  })
+}
+
+// Build per-rep monthly ford-distribution trend (shares 0–1) for all 12 months.
+function buildFordDistTrend(saleRows: SaleRow[], year: number): FordDistPoint[] {
+  return buildYearMonthKeys(year).map(ym => {
+    const rows = filterByDateRange(saleRows, 'dato_kjopt', `${ym}-01`, `${ym}-31`)
+    let fastpris = 0, kommisjon = 0, salgshjelp = 0
+    for (const s of rows) {
+      const b = s.biler ?? 0
+      if (b <= 0) continue
+      if (s.bonustype === 'Salgshjelp') {
+        salgshjelp += b
+      } else if (s.salgstype === 'B2B' || s.salgstype === 'Retail') {
+        fastpris += b
+      } else if (s.salgstype === 'Kommisjon' || s.salgstype === 'Fjernkommisjon') {
+        kommisjon += b
+      }
+    }
+    const total = fastpris + kommisjon + salgshjelp
+    if (total === 0) return { month: ym, fastpris: 0, kommisjon: 0, salgshjelp: 0 }
+    return { month: ym, fastpris: fastpris/total, kommisjon: kommisjon/total, salgshjelp: salgshjelp/total }
+  })
+}
+
 // Master function — assembles the full RepDashboard from raw DB rows.
 // Filters by rep, computes current-month + last-30-day metrics, trend, bonus, and table data.
 // Input: rep (Rep), allSales/allLeads/allNps (full-year rows for all reps)
@@ -201,7 +283,12 @@ export function buildDashboard(
     medianTrend:         buildMedianTrend(allSales, allLeads, allNps, year),
     bonus:               computeBonus(rep, repSalesMonth, repLeadsMonth, repNpsMonth),
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
+    salesLast30Days:     repSales30,
     salesByMonth,
+    medianPrisPctMonth:  computeMedianPrisPct(allSales, currentMonthStart, todayStr),
+    medianPrisPct30:     computeMedianPrisPct(allSales, last30Start, todayStr),
+    prisDistTrend:       buildPrisDistTrend(repSales, year),
+    fordDistTrend:       buildFordDistTrend(repSales, year),
     lastUpdated:         new Date().toISOString(),
   }
 }
