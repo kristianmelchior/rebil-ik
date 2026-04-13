@@ -2,7 +2,7 @@
 
 // Stats — admin/teamleder-only team overview table with 6 metrics per rep.
 
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import type { StatsData, RepStatsEntry } from '@/app/api/stats/route'
 
 // ─── Period helpers ───────────────────────────────────────────────────────────
@@ -49,6 +49,7 @@ interface ColDef {
   label: string
   fmt: (r: RepStatsEntry) => string
   primary: boolean
+  neutral?: boolean
 }
 
 const COLS: ColDef[] = [
@@ -57,8 +58,28 @@ const COLS: ColDef[] = [
   { key: 'konvertering', label: 'Konvertering',   fmt: r => fmtKonv(r.konvertering),      primary: true  },
   { key: 'npsScore',     label: 'NPS',            fmt: r => fmtNps(r.npsScore),           primary: true  },
   { key: 'leads',        label: 'Leads',          fmt: r => fmt(r.leads),                 primary: false },
-  { key: 'fastprisPct',  label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),        primary: false },
+  { key: 'fastprisPct',  label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),        primary: false, neutral: true },
 ]
+
+// ─── Conditional formatting ───────────────────────────────────────────────────
+
+function condStyle(
+  value: number | null,
+  rows: RepStatsEntry[],
+  key: SortKey,
+): React.CSSProperties {
+  if (value === null) return {}
+  const activeRows = rows.filter(r => r.bilerKjopt > 0)
+  const vals = activeRows.map(r => r[key] as number | null).filter((v): v is number => v !== null)
+  if (vals.length < 3) return {}
+  const min = Math.min(...vals)
+  const max = Math.max(...vals)
+  if (min === max) return {}
+  const norm = (value - min) / (max - min)
+  if (norm >= 0.75) return { color: '#16a34a' }
+  if (norm <= 0.25) return { color: '#dc2626' }
+  return {}
+}
 
 // ─── Sort helpers ─────────────────────────────────────────────────────────────
 
@@ -260,8 +281,9 @@ export default function StatsTab() {
                   {COLS.map(col => (
                     <td
                       key={col.key as string}
+                      style={col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
                       className={`px-4 py-3 text-right tabular-nums ${
-                        col.primary ? 'font-semibold text-text-primary' : 'font-normal text-text-muted'
+                        col.primary ? 'font-semibold' : 'font-normal'
                       }`}
                     >
                       {col.fmt(row)}
