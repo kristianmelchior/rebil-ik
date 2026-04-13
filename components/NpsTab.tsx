@@ -55,13 +55,20 @@ export default function NpsTab({ rows }: NpsTabProps) {
           {rows.map((row, i) => (
             <tr
               key={row.record_id}
-              onClick={() => window.open(`${HS_BASE}/${row.record_id}/`, '_blank', 'noopener')}
-              className={`border-b border-border last:border-0 cursor-pointer hover:bg-bg transition-colors ${
+              className={`border-b border-border last:border-0 hover:bg-bg transition-colors ${
                 i % 2 === 0 ? '' : 'bg-bg'
               }`}
             >
-              <td className="px-4 py-3 text-text-secondary whitespace-nowrap">
-                {formatDate(row.submitted_at)}
+              <td className="px-4 py-3 whitespace-nowrap">
+                <a
+                  href={`${HS_BASE}/${row.record_id}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  className="text-text-secondary underline underline-offset-2 decoration-text-muted hover:text-text-primary"
+                >
+                  {formatDate(row.submitted_at)}
+                </a>
               </td>
               <td className="px-4 py-3 text-text-primary">
                 {row.survey || '—'}
