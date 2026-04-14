@@ -64,5 +64,8 @@ export async function GET(request: Request) {
     path: '/',
   })
 
-  return NextResponse.redirect(origin)
+  // Support ?next= for multi-app redirects (e.g. /tl after TL login)
+  const next = searchParams.get('next')
+  const destination = next && /^\/[^/]/.test(next) ? next : '/'
+  return NextResponse.redirect(`${origin}${destination}`)
 }
