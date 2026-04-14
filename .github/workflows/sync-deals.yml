@@ -21,9 +21,9 @@ jobs:
         run: pip install -r sync/requirements.txt
 
       - name: Run sync
+        working-directory: sync
         env:
           HUBSPOT_API_KEY:      ${{ secrets.HUBSPOT_API_KEY }}
           SUPABASE_URL:         ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          CLOSED_STAGE_IDS:     ${{ secrets.CLOSED_STAGE_IDS }}
-        run: python sync/sync.py
+        run: python sync.py
