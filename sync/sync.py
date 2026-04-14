@@ -32,6 +32,8 @@ BASE_PROPERTIES = [
     "createdate",
     "notes_last_updated",
     "notes_next_activity_date",
+    "innbytte_",
+    "type_lead",
 ]
 
 # ── HubSpot helpers ───────────────────────────────────────────────────────────
@@ -107,6 +109,8 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
         "last_activity_at":     p.get("notes_last_updated"),
         "last_stage_change_at": get_last_stage_change(p),
         "next_activity_date":   (p.get("notes_next_activity_date") or "")[:10] or None,
+        "innbytte_":            p.get("innbytte_"),
+        "type_lead":            p.get("type_lead"),
     }
 
 
