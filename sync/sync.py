@@ -46,9 +46,16 @@ def get_pipeline_stages(pipeline_id: str) -> list[dict]:
     return r.json().get("results", [])
 
 
-def fetch_all_deals(properties: list[str]) -> list[dict]:
-    """Page through HubSpot CRM search API and return ALL deals in the pipeline
-    (filtering happens in Python so we can log closed counts)."""
+def get_valid_deal_properties() -> set[str]:
+    """Return the set of all existing deal property names from HubSpot."""
+    url = f"{HUBSPOT_BASE}/crm/v3/properties/deals"
+    r = httpx.get(url, headers=HEADERS, timeout=30)
+    r.raise_for_status()
+    return {p["name"] for p in r.json().get("results", [])}
+
+
+def _search_deals(properties: list[str]) -> list[dict]:
+    """Single paginated fetch with a fixed property list. Raises on HTTP errors."""
     url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
     deals = []
     after = None
@@ -84,6 +91,11 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
             break
 
     return deals
+
+
+def fetch_all_deals(properties: list[str]) -> list[dict]:
+    """Fetch all deals. Filters properties against HubSpot's property registry first."""
+    return _search_deals(properties)
 
 
 # ── Transform ─────────────────────────────────────────────────────────────────
@@ -125,7 +137,12 @@ def main():
     stage_labels = [s["id"] + " (" + s["label"] + ")" for s in stages]
     print(f"  Stages: {stage_labels}")
 
-    properties = BASE_PROPERTIES + [f"hs_date_entered_{sid}" for sid in stage_ids]
+    valid_props  = get_valid_deal_properties()
+    stage_date_props = [f"hs_date_entered_{sid}" for sid in stage_ids]
+    properties   = BASE_PROPERTIES + [p for p in stage_date_props if p in valid_props]
+    dropped      = [p for p in stage_date_props if p not in valid_props]
+    if dropped:
+        print(f"  Skipping {len(dropped)} hs_date_entered_ props not yet in HubSpot: {dropped}")
 
     print("Fetching all deals from HubSpot…")
     all_deals = fetch_all_deals(properties)
