@@ -100,7 +100,7 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
         "owner_id":           p.get("referent___owner"),
         "stage_id":           stage_id,
         "stage_name":         stage_name_map.get(stage_id),
-        "create_date":        (p.get("createdate") or "")[:10] or None,
+        "create_date":        p.get("createdate"),
         "last_activity_at":   p.get("notes_last_updated"),
         "last_modified_at":   p.get("hs_lastmodifieddate"),
         "next_activity_date": (p.get("notes_next_activity_date") or "")[:10] or None,
@@ -127,37 +127,16 @@ def main():
 
     rows = [to_row(d, stage_name_map) for d in all_deals]
 
-    print("Upserting to Supabase deals_current…")
-    supabase   = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    print("Writing to Supabase deals_current…")
+    supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    supabase.table("deals_current").delete().neq("deal_id", "").execute()
+    print("  Table cleared")
+
     batch_size = 500
     for b, i in enumerate(range(0, len(rows), batch_size)):
         batch = rows[i : i + batch_size]
-        try:
-            supabase.table("deals_current").upsert(batch, on_conflict="deal_id").execute()
-            print(f"  Batch {b + 1}: {len(batch)} rows upserted")
-        except Exception as e:
-            print(f"  Batch {b + 1} failed — trying row by row to find culprit…")
-            for j, row in enumerate(batch):
-                try:
-                    supabase.table("deals_current").upsert(row).execute()
-                except Exception as row_e:
-                    print(f"  Failed on row {j}: {row_e}")
-                    print(f"  Row data: {json.dumps(row, indent=2, default=str)}")
-                    raise
-
-    # Remove stale deals: fetch current IDs from Supabase, delete those not in active set
-    active_ids = set(r["deal_id"] for r in rows)
-    existing   = supabase.table("deals_current").select("deal_id").execute()
-    stale_ids  = [r["deal_id"] for r in existing.data if r["deal_id"] not in active_ids]
-    if stale_ids:
-        stale_rows = [r for r in existing.data if r["deal_id"] in set(stale_ids)]
-        for r in stale_rows:
-            print(f"    Removing stale: {r['deal_id']} — {r.get('deal_name')} (stage: {r.get('stage_name')})")
-        for i in range(0, len(stale_ids), 100):
-            supabase.table("deals_current").delete().in_("deal_id", stale_ids[i:i+100]).execute()
-        print(f"  {len(stale_ids)} stale deals removed")
-    else:
-        print("  No stale deals")
+        supabase.table("deals_current").insert(batch).execute()
+        print(f"  Batch {b + 1}: {len(batch)} rows inserted")
 
     print("Done.")
 
