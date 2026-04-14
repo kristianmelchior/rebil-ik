@@ -38,6 +38,34 @@ STAGE_CATEGORY: dict[str, str] = {
     "3677025490": "VERIFIKASJON/SLUTTFØRING",  # Rebil salgshjeeeelp
 }
 
+# Active stage IDs — used as the search filter. Equals all pipeline stages
+# minus the excluded ones below. Update both lists when stages change.
+ACTIVE_STAGE_IDS: list[str] = [
+    "5095786727",  # Pool winback leads
+    "1446317287",  # Lead qualification
+    "188841923",   # Nye leads
+    "1992087774",  # Ferdig estimert
+    "4610331873",  # Innbytte - send til Retail
+    "74384847",    # Kontaktforsøk 1 + SMS
+    "71217910",    # Kontaktforsøk 2
+    "1795037396",  # Henter inn bud - plattform & prising
+    "434020796",   # Venter på bud
+    "519657156",   # Tilbud klart
+    "519657157",   # KF1
+    "519657158",   # KF2
+    "431588053",   # Send tilbud
+    "189321201",   # Lead, tilbud sendt
+    "122403776",   # Kontaktforsøk 1 + SMS, lead
+    "122403777",   # Kontaktforsøk 2, lead
+    "141045495",   # I dialog med kunde
+    "185258735",   # Hot lead
+    "188827594",   # Videovisning avtalt
+    "188827595",   # Videovisning under arbeid
+    "188827596",   # Aksept/Få slettebekreftelse/lage kontrakt
+    "188827597",   # Kontrakt signert
+    "3677025490",  # Rebil salgshjeeeelp
+]
+
 # Stage IDs to exclude from deals_current.
 # These are avslag, winback, bobil/lastebil and inter-pipeline transfer stages.
 EXCLUDED_STAGE_IDS: list[str] = [

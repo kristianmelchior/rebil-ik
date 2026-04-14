@@ -15,7 +15,7 @@ import os
 import sys
 import httpx
 from supabase import create_client
-from config import PIPELINE_ID, EXCLUDED_STAGE_IDS, STAGE_CATEGORY
+from config import PIPELINE_ID, ACTIVE_STAGE_IDS, EXCLUDED_STAGE_IDS, STAGE_CATEGORY
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -47,11 +47,10 @@ def get_pipeline_stages(pipeline_id: str) -> list[dict]:
 
 
 def fetch_all_deals(properties: list[str]) -> list[dict]:
-    """Page through HubSpot CRM search API and return all deals in the pipeline."""
+    """Page through HubSpot CRM search API and return all active deals."""
     url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
     deals = []
     after = None
-    first = True
 
     while True:
         payload: dict = {
@@ -59,9 +58,9 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
                 {
                     "filters": [
                         {
-                            "propertyName": "pipeline",
-                            "operator":     "EQ",
-                            "value":        PIPELINE_ID,
+                            "propertyName": "dealstage",
+                            "operator":     "IN",
+                            "values":       ACTIVE_STAGE_IDS,
                         }
                     ]
                 }
@@ -71,10 +70,6 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
         }
         if after:
             payload["after"] = after
-
-        if first:
-            print(f"  Request body: {json.dumps(payload, indent=2)}")
-            first = False
 
         r = httpx.post(url, headers=HEADERS, json=payload, timeout=30)
         if not r.is_success:
@@ -124,14 +119,9 @@ def main():
 
     print("Fetching all deals from HubSpot…")
     all_deals = fetch_all_deals(properties)
-    print(f"  {len(all_deals)} total deals fetched")
+    print(f"  {len(all_deals)} active deals fetched")
 
-    excluded     = set(EXCLUDED_STAGE_IDS)
-    active       = [d for d in all_deals if d.get("properties", {}).get("dealstage") not in excluded]
-    closed_count = len(all_deals) - len(active)
-    print(f"  {len(active)} active, {closed_count} excluded by config.py")
-
-    rows = [to_row(d, stage_name_map) for d in active]
+    rows = [to_row(d, stage_name_map) for d in all_deals]
 
     print("Upserting to Supabase deals_current…")
     supabase   = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
