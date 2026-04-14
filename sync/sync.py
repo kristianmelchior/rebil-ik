@@ -122,7 +122,8 @@ def main():
     stages         = get_pipeline_stages(PIPELINE_ID)
     stage_name_map = {s["id"]: s["label"] for s in stages}
     stage_ids      = [s["id"] for s in stages]
-    print(f"  Stages: {[f'{s[\"id\"]} ({s[\"label\"]})' for s in stages]}")
+    stage_labels = [s["id"] + " (" + s["label"] + ")" for s in stages]
+    print(f"  Stages: {stage_labels}")
 
     properties = BASE_PROPERTIES + [f"hs_date_entered_{sid}" for sid in stage_ids]
 
