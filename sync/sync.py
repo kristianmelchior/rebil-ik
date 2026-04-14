@@ -27,9 +27,13 @@ HEADERS      = {"Authorization": f"Bearer {HUBSPOT_API_KEY}"}
 
 BASE_PROPERTIES = [
     "dealname",
-    "referent___owner",
     "dealstage",
     "createdate",
+]
+
+# Add these back one by one once BASE_PROPERTIES sync is confirmed working
+OPTIONAL_PROPERTIES = [
+    "referent___owner",
     "notes_next_activity_date",
     "innbytte_",
     "type_lead",
@@ -140,11 +144,12 @@ def main():
 
     valid_props      = get_valid_deal_properties()
     stage_date_props = [f"hs_date_entered_{sid}" for sid in stage_ids]
-    all_wanted       = BASE_PROPERTIES + stage_date_props
+    all_wanted       = BASE_PROPERTIES + OPTIONAL_PROPERTIES + stage_date_props
     properties       = [p for p in all_wanted if p in valid_props]
     dropped          = [p for p in all_wanted if p not in valid_props]
     if dropped:
         print(f"  Skipping {len(dropped)} props not in HubSpot: {dropped}")
+    print(f"  Requesting properties: {properties}")
 
     print("Fetching all deals from HubSpot…")
     all_deals = fetch_all_deals(properties)
