@@ -137,12 +137,13 @@ def main():
     stage_labels = [s["id"] + " (" + s["label"] + ")" for s in stages]
     print(f"  Stages: {stage_labels}")
 
-    valid_props  = get_valid_deal_properties()
+    valid_props      = get_valid_deal_properties()
     stage_date_props = [f"hs_date_entered_{sid}" for sid in stage_ids]
-    properties   = BASE_PROPERTIES + [p for p in stage_date_props if p in valid_props]
-    dropped      = [p for p in stage_date_props if p not in valid_props]
+    all_wanted       = BASE_PROPERTIES + stage_date_props
+    properties       = [p for p in all_wanted if p in valid_props]
+    dropped          = [p for p in all_wanted if p not in valid_props]
     if dropped:
-        print(f"  Skipping {len(dropped)} hs_date_entered_ props not yet in HubSpot: {dropped}")
+        print(f"  Skipping {len(dropped)} props not in HubSpot: {dropped}")
 
     print("Fetching all deals from HubSpot…")
     all_deals = fetch_all_deals(properties)
