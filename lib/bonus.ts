@@ -1,7 +1,7 @@
 // Bonus calculation — steps 1–8. Pure functions, no side effects.
 // Never change a formula. Flag if anything looks wrong.
 
-import type { Rep, SaleRow, LeadRow, NpsRow, BonusResult } from './types'
+import type { Rep, SaleRow, NpsRow, BonusResult } from './types'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
 
@@ -42,7 +42,7 @@ function lookupNpsBonus(score: number): number {
 export function computeBonus(
   rep: Rep,
   saleRows: SaleRow[],
-  leadRows: LeadRow[],
+  leadCount: number,
   npsRows: NpsRow[]
 ): BonusResult {
   // Step 1 — Base bonus: SUM(bonus) for all rows (null → 0; Avslått rows included)
@@ -50,7 +50,7 @@ export function computeBonus(
 
   // Step 2 — Conversion rate
   const carsThisMonth = saleRows.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
-  const leadsThisMonth = leadRows.filter(r => r.teller_lead).length
+  const leadsThisMonth = leadCount
   // Edge: leadsThisMonth === 0 → convRate = 0, convFactor = 1.0, skip lookup
   const convRate = leadsThisMonth === 0 ? 0 : (carsThisMonth / leadsThisMonth) * 100
 

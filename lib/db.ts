@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
-import type { Rep, SaleRow, LeadRow, NpsRow } from './types'
+import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg } from './types'
 
 // Cache TTLs (seconds)
 const TTL_SALES_DATA = 300  // 5 min — sales/leads/NPS shared across all users
@@ -202,21 +202,27 @@ export const getAllSales = unstable_cache(
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
-// Fetch all leads rows for a given year where teller_lead = true.
-// Input: year (number)  Output: LeadRow[]
-export const getAllLeads = unstable_cache(
-  async (year: number): Promise<LeadRow[]> => {
-    return fetchAll<LeadRow>((from, to) =>
-      supabase
-        .from('leads')
-        .select('*')
-        .eq('teller_lead', true)
-        .gte('createdate', `${year}-01-01`)
-        .lte('createdate', `${year}-12-31`)
-        .range(from, to)
-    )
+// Aggregated lead counts per rep per month via RPC — replaces raw row fetching.
+// Input: year (number)  Output: LeadMonthlyAgg[]
+export const getLeadsMonthly = unstable_cache(
+  async (year: number): Promise<LeadMonthlyAgg[]> => {
+    const { data, error } = await supabase.rpc('get_leads_monthly', { p_year: year })
+    if (error) throw error
+    return (data ?? []) as LeadMonthlyAgg[]
   },
-  ['all-leads'],
+  ['leads-monthly'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Aggregated lead counts per rep for an arbitrary date range via RPC.
+// Input: from/to (YYYY-MM-DD strings)  Output: LeadRangeAgg[]
+export const getLeadsRange = unstable_cache(
+  async (from: string, to: string): Promise<LeadRangeAgg[]> => {
+    const { data, error } = await supabase.rpc('get_leads_range', { p_from: from, p_to: to })
+    if (error) throw error
+    return (data ?? []) as LeadRangeAgg[]
+  },
+  ['leads-range'],
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 

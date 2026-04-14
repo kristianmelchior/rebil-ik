@@ -131,6 +131,20 @@ export interface RepDashboard {
   teamView?: TeamlederDashboardMeta
 }
 
+// Aggregated lead counts returned by Supabase RPC (replaces raw LeadRow fetching)
+export interface LeadMonthlyAgg {
+  kode: string
+  teamleder: string
+  month: string       // 'YYYY-MM'
+  lead_count: number
+}
+
+export interface LeadRangeAgg {
+  kode: string
+  teamleder: string
+  lead_count: number
+}
+
 // Boooom! feed — /api/feed/reactions
 export interface FeedReactionGroup {
   emoji: string

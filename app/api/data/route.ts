@@ -4,7 +4,8 @@ import { cookies } from 'next/headers'
 import {
   getRepByKode,
   getAllSales,
-  getAllLeads,
+  getLeadsMonthly,
+  getLeadsRange,
   getAllNps,
   getAllRepsForPicker,
   getTeamMembers,
@@ -57,14 +58,21 @@ export async function GET() {
       }
     }
 
-    const year = new Date().getFullYear()
-    const [allSales, allLeads, allNps] = await Promise.all([
+    const today = new Date()
+    const year = today.getFullYear()
+    const todayStr = today.toISOString().slice(0, 10)
+    const last30Date = new Date(today)
+    last30Date.setDate(last30Date.getDate() - 30)
+    const last30Start = last30Date.toISOString().slice(0, 10)
+
+    const [allSales, leadMonthly, leadRange30, allNps] = await Promise.all([
       getAllSales(year),
-      getAllLeads(year),
+      getLeadsMonthly(year),
+      getLeadsRange(last30Start, todayStr),
       getAllNps(year),
     ])
 
-    const dashboard = buildDashboard(rep, allSales, allLeads, allNps)
+    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps)
 
     if (isAdmin) {
       const reps = await getAllRepsForPicker()

@@ -12,6 +12,8 @@ const MONTH_NAMES = [
   'Juli', 'August', 'September', 'Oktober', 'November', 'Desember',
 ]
 
+const DATA_START_YEAR = 2026
+
 function buildMonthOptions(): { label: string; value: string }[] {
   const now = new Date()
   const options: { label: string; value: string }[] = []
@@ -22,11 +24,13 @@ function buildMonthOptions(): { label: string; value: string }[] {
     })
   }
   const prev = now.getFullYear() - 1
-  for (let m = 11; m >= 0; m--) {
-    options.push({
-      label: `${MONTH_NAMES[m]} ${prev}`,
-      value: `${prev}-${String(m + 1).padStart(2, '0')}`,
-    })
+  if (prev >= DATA_START_YEAR) {
+    for (let m = 11; m >= 0; m--) {
+      options.push({
+        label: `${MONTH_NAMES[m]} ${prev}`,
+        value: `${prev}-${String(m + 1).padStart(2, '0')}`,
+      })
+    }
   }
   return options
 }
@@ -136,14 +140,14 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 
 type Mode = 'month' | '30d' | 'custom'
 
-export default function StatsTab() {
+export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string }) {
   const [mode,      setMode]      = useState<Mode>('month')
   const [period,    setPeriod]    = useState(MONTH_OPTIONS[0]?.value ?? '')
   const [data,      setData]      = useState<StatsData | null>(null)
   const [loading,   setLoading]   = useState(true)
   const [sortKey,   setSortKey]   = useState<SortKey>('bilerKjopt')
   const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('desc')
-  const [tlFilter,  setTlFilter]  = useState<string>('__all__')
+  const [tlFilter,  setTlFilter]  = useState<string>(defaultTlFilter ?? '__all__')
 
   useEffect(() => {
     setLoading(true)

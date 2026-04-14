@@ -2,13 +2,13 @@
 // Admin and teamleder only — returns per-rep metrics for all reps with a defined kode.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getAllLeads, getAllNps, getAllRepsWithDetails, getRepByKode } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   isTeamleder,
 } from '@/lib/auth'
-import type { SaleRow, LeadRow, NpsRow } from '@/lib/types'
+import type { SaleRow, NpsRow, LeadRangeAgg } from '@/lib/types'
 
 function skipKode(kode: string | null | undefined): boolean {
   return kode == null || kode === '' || kode === 'zz_unknown'
@@ -42,7 +42,9 @@ function dateRange(mode: string | null, period: string | null): { from: string; 
   const todayStr = today.toISOString().slice(0, 10)
 
   if (period && /^\d{4}-\d{2}$/.test(period)) {
-    return { from: `${period}-01`, to: `${period}-31` }
+    const [py, pm] = period.split('-').map(Number)
+    const lastDay = new Date(py, pm, 0).getDate()
+    return { from: `${period}-01`, to: `${period}-${String(lastDay).padStart(2, '0')}` }
   }
   if (mode === '30d') {
     const d = new Date(today)
@@ -59,25 +61,24 @@ async function fetchYears(from: string, to: string) {
   const fromYear = parseInt(from.slice(0, 4))
   const toYear   = parseInt(to.slice(0, 4))
   if (fromYear === toYear) {
-    const [s, l, n] = await Promise.all([getAllSales(fromYear), getAllLeads(fromYear), getAllNps(fromYear)])
-    return { sales: s, leads: l, nps: n }
+    const [s, n] = await Promise.all([getAllSales(fromYear), getAllNps(fromYear)])
+    return { sales: s, nps: n }
   }
   // spans two years (e.g. 30d in early January)
-  const [s1, l1, n1, s2, l2, n2] = await Promise.all([
-    getAllSales(fromYear), getAllLeads(fromYear), getAllNps(fromYear),
-    getAllSales(toYear),   getAllLeads(toYear),   getAllNps(toYear),
+  const [s1, n1, s2, n2] = await Promise.all([
+    getAllSales(fromYear), getAllNps(fromYear),
+    getAllSales(toYear),   getAllNps(toYear),
   ])
-  return { sales: [...s1, ...s2], leads: [...l1, ...l2], nps: [...n1, ...n2] }
+  return { sales: [...s1, ...s2], nps: [...n1, ...n2] }
 }
 
 const PRIS_SET = new Set(['Pris', 'Rabattnivå 1', 'Rabattnivå 2', 'Minstepris'])
 
 function buildMetrics(
-  sales: SaleRow[], leads: LeadRow[], nps: NpsRow[], from: string, to: string,
+  sales: SaleRow[], leadsAgg: LeadRangeAgg[], nps: NpsRow[], from: string, to: string,
   reps: { kode: string; full_name: string; teamleder: string }[]
 ): RepStatsEntry[] {
   const periodSales = sales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
-  const periodLeads = leads.filter(l => l.createdate  >= from && l.createdate  <= to)
   const periodNps   = nps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
 
   return reps.map(rep => {
@@ -88,8 +89,7 @@ function buildMetrics(
     const bilerKjopt = repSales.reduce((sum, s) => sum + (s.biler ?? 0), 0)
 
     // leads
-    const repLeads = periodLeads.filter(l => l.kode === k && l.teller_lead)
-    const leadsCount = repLeads.length
+    const leadsCount = Number(leadsAgg.find(l => l.kode === k)?.lead_count ?? 0)
 
     // konvertering
     const konvertering = leadsCount === 0 ? null : (bilerKjopt / leadsCount) * 100
@@ -156,14 +156,15 @@ export async function GET(request: Request) {
   const { from, to } = dateRange(mode, period)
 
   try {
-    const [reps, { sales, leads, nps }] = await Promise.all([
+    const [reps, { sales, nps }, leadsAgg] = await Promise.all([
       getAllRepsWithDetails(),
       fetchYears(from, to),
+      getLeadsRange(from, to),
     ])
 
     // Only include reps with a non-empty kode (skip zz_unknown etc.)
     const activeReps = reps.filter(r => !skipKode(r.kode))
-    const rows = buildMetrics(sales, leads, nps, from, to, activeReps)
+    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps)
 
     return Response.json({ rows, from, to } satisfies StatsData, {
       headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' },

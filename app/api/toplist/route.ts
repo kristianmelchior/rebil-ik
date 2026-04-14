@@ -1,13 +1,13 @@
 // GET /api/toplist?period=YYYY-MM — team leaderboard for a given month.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getAllLeads, getAllNps } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   TEAM_VIEW_KODE_COOKIE_NAME,
 } from '@/lib/auth'
-import type { SaleRow, LeadRow, NpsRow } from '@/lib/types'
+import type { SaleRow, NpsRow } from '@/lib/types'
 
 function skipKode(kode: string | null | undefined): boolean {
   return kode == null || kode === '' || kode === 'zz_unknown'
@@ -27,11 +27,10 @@ export interface ToplistData {
 }
 
 function buildRepNameMap(
-  sales: SaleRow[], leads: LeadRow[], nps: NpsRow[]
+  sales: SaleRow[], nps: NpsRow[]
 ): Map<string, string> {
   const map = new Map<string, string>()
   for (const r of sales) if (!skipKode(r.kode)) map.set(r.kode, r.rep_name)
-  for (const r of leads) if (!skipKode(r.kode)) map.set(r.kode, r.rep_name)
   for (const r of nps)   if (!skipKode(r.kode) && r.kode) map.set(r.kode!, r.rep_name)
   return map
 }
@@ -60,21 +59,22 @@ export async function GET(request: Request) {
   }
 
   const year = parseInt(period.slice(0, 4))
+  const month = parseInt(period.slice(5, 7))
+  const lastDay = new Date(year, month, 0).getDate()
   const from = `${period}-01`
-  const to   = `${period}-31`
+  const to   = `${period}-${String(lastDay).padStart(2, '0')}`
 
   try {
-    const [allSales, allLeads, allNps] = await Promise.all([
+    const [allSales, leadsAgg, allNps] = await Promise.all([
       getAllSales(year),
-      getAllLeads(year),
+      getLeadsRange(from, to),
       getAllNps(year),
     ])
 
     const sales = allSales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
-    const leads = allLeads.filter(l => l.createdate  >= from && l.createdate  <= to)
     const nps   = allNps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
 
-    const nameMap = buildRepNameMap(sales, leads, nps)
+    const nameMap = buildRepNameMap(sales, nps)
     const kodes   = Array.from(nameMap.keys())
 
     // ── Biler kjøpt ──
@@ -104,9 +104,9 @@ export async function GET(request: Request) {
       konvSales.set(s.kode, (konvSales.get(s.kode) ?? 0) + (s.biler ?? 0))
     }
     const konvLeads = new Map<string, number>()
-    for (const l of leads) {
-      if (skipKode(l.kode) || !l.teller_lead) continue
-      konvLeads.set(l.kode, (konvLeads.get(l.kode) ?? 0) + 1)
+    for (const l of leadsAgg) {
+      if (skipKode(l.kode)) continue
+      konvLeads.set(l.kode, Number(l.lead_count))
     }
 
     // ── NPS ──

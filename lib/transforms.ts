@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, LeadRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint } from './types'
+import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -29,14 +29,14 @@ function filterByDateRange<T>(rows: T[], dateField: keyof T, from: string, to: s
 
 // Compute PeriodMetrics from a set of rows already filtered to one rep and period.
 // bilerKjopt = SUM(biler) not COUNT(*). konverteringsrate null if leads === 0.
-// Input: saleRows, leadRows, npsRows  Output: PeriodMetrics
+// Input: saleRows, leadCount (pre-aggregated), npsRows  Output: PeriodMetrics
 function computeMetrics(
   saleRows: SaleRow[],
-  leadRows: LeadRow[],
+  leadCount: number,
   npsRows: NpsRow[]
 ): PeriodMetrics {
   const bilerKjopt = saleRows.reduce((sum, r) => sum + r.biler, 0)
-  const leads = leadRows.filter(r => r.teller_lead).length
+  const leads = leadCount
   const konverteringsrate = leads === 0 ? null : (bilerKjopt / leads) * 100
 
   const npsValues = npsRows.map(r => r.nps_adj_score)
@@ -97,27 +97,45 @@ function computeMedianPrisPct(allSaleRows: SaleRow[], from: string, to: string):
   return percentile(pcts, 80)
 }
 
+// Build a kode → leadCount map from monthly agg for a specific 'YYYY-MM' key.
+function buildLeadMapForMonth(leadMonthly: LeadMonthlyAgg[], monthKey: string): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const r of leadMonthly) {
+    if (r.month === monthKey) {
+      map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.lead_count))
+    }
+  }
+  return map
+}
+
+// Build a kode → leadCount map from range agg.
+function buildLeadMapFromRange(leadRange: LeadRangeAgg[]): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const r of leadRange) {
+    map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.lead_count))
+  }
+  return map
+}
+
 // Compute team-wide PeriodMetrics median for a date range.
-// Collects all unique rep kodes from all three tables, computes per-rep metrics,
-// then takes the median of each field (nulls excluded from median calculation).
-// Input: all year rows for all reps, from/to date strings  Output: PeriodMetrics
+// Collects all unique rep kodes from sales, nps, and the lead map.
+// Input: all year rows for all reps, leadsByKode map, from/to date strings  Output: PeriodMetrics
 function computeTeamMedian(
   allSaleRows: SaleRow[],
-  allLeadRows: LeadRow[],
+  leadsByKode: Map<string, number>,
   allNpsRows: NpsRow[],
   from: string,
   to: string
 ): PeriodMetrics {
   const salesInRange = filterByDateRange(allSaleRows, 'dato_kjopt',   from, to)
-  const leadsInRange = filterByDateRange(allLeadRows, 'createdate',   from, to)
   const npsInRange   = filterByDateRange(allNpsRows,  'submitted_at', from, to)
 
   const kodeSet = new Set<string>()
   for (const r of salesInRange) {
     if (!skipKodeForTeamMedian(r.kode)) kodeSet.add(r.kode)
   }
-  for (const r of leadsInRange) {
-    if (!skipKodeForTeamMedian(r.kode)) kodeSet.add(r.kode)
+  for (const k of leadsByKode.keys()) {
+    if (!skipKodeForTeamMedian(k)) kodeSet.add(k)
   }
   for (const r of npsInRange) {
     const k = r.kode
@@ -131,7 +149,7 @@ function computeTeamMedian(
 
   const perRep = kodes.map(kode => computeMetrics(
     filterByKode(salesInRange, kode),
-    filterByKode(leadsInRange, kode),
+    leadsByKode.get(kode) ?? 0,
     filterByKode(npsInRange,   kode),
   ))
 
@@ -154,36 +172,44 @@ function buildYearMonthKeys(year: number): string[] {
 
 // Build per-rep trend for all 12 months of the year (Jan–Dec), oldest first.
 // Future months return real zeros — TrendCharts.tsx converts them to null for rendering.
-// Input: rep's saleRows/leadRows/npsRows (already kode-filtered), year
+// Input: rep's saleRows/npsRows (already kode-filtered), repLeadMonthly, year
 // Output: 12 entries of (PeriodMetrics & { month: string })
 function buildTrend(
   saleRows: SaleRow[],
-  leadRows: LeadRow[],
+  repLeadMonthly: LeadMonthlyAgg[],
   npsRows: NpsRow[],
   year: number
 ): (PeriodMetrics & { month: string })[] {
-  return buildYearMonthKeys(year).map(ym => ({
-    month: ym,
-    ...computeMetrics(
-      filterByDateRange(saleRows, 'dato_kjopt', `${ym}-01`, `${ym}-31`),
-      filterByDateRange(leadRows, 'createdate', `${ym}-01`, `${ym}-31`),
-      filterByDateRange(npsRows,  'month',      `${ym}-01`, `${ym}-31`),
-    ),
-  }))
+  return buildYearMonthKeys(year).map(ym => {
+    const leadCount = repLeadMonthly
+      .filter(r => r.month === ym)
+      .reduce((s, r) => s + Number(r.lead_count), 0)
+    return {
+      month: ym,
+      ...computeMetrics(
+        filterByDateRange(saleRows, 'dato_kjopt', `${ym}-01`, `${ym}-31`),
+        leadCount,
+        filterByDateRange(npsRows,  'month',      `${ym}-01`, `${ym}-31`),
+      ),
+    }
+  })
 }
 
 // Build team median trend for all 12 months of the year (Jan–Dec), oldest first.
-// Input: all-rep rows, year  Output: 12 entries of (PeriodMetrics & { month: string })
+// Input: all-rep rows, allLeadMonthly, year  Output: 12 entries of (PeriodMetrics & { month: string })
 function buildMedianTrend(
   allSaleRows: SaleRow[],
-  allLeadRows: LeadRow[],
+  allLeadMonthly: LeadMonthlyAgg[],
   allNpsRows: NpsRow[],
   year: number
 ): (PeriodMetrics & { month: string })[] {
-  return buildYearMonthKeys(year).map(ym => ({
-    month: ym,
-    ...computeTeamMedian(allSaleRows, allLeadRows, allNpsRows, `${ym}-01`, `${ym}-31`),
-  }))
+  return buildYearMonthKeys(year).map(ym => {
+    const leadMap = buildLeadMapForMonth(allLeadMonthly, ym)
+    return {
+      month: ym,
+      ...computeTeamMedian(allSaleRows, leadMap, allNpsRows, `${ym}-01`, `${ym}-31`),
+    }
+  })
 }
 
 // Build per-rep monthly pris-distribution trend (shares 0–1) for all 12 months.
@@ -229,14 +255,14 @@ function buildFordDistTrend(saleRows: SaleRow[], year: number): FordDistPoint[] 
   })
 }
 
-// Master function — assembles the full RepDashboard from raw DB rows.
-// Filters by rep, computes current-month + last-30-day metrics, trend, bonus, and table data.
-// Input: rep (Rep), allSales/allLeads/allNps (full-year rows for all reps)
+// Master function — assembles the full RepDashboard from raw DB rows + aggregated lead data.
+// Input: rep, allSales, leadMonthly (full year agg), leadRange30 (last-30-days agg), allNps
 // Output: RepDashboard
 export function buildDashboard(
   rep: Rep,
   allSales: SaleRow[],
-  allLeads: LeadRow[],
+  leadMonthly: LeadMonthlyAgg[],
+  leadRange30: LeadRangeAgg[],
   allNps: NpsRow[]
 ): RepDashboard {
   const today = new Date()
@@ -251,19 +277,27 @@ export function buildDashboard(
   const last30Start = last30Date.toISOString().slice(0, 10)
 
   // Isolate this rep's rows
-  const repSales = filterByKode(allSales, rep.kode)
-  const repLeads = filterByKode(allLeads, rep.kode)
-  const repNps   = filterByKode(allNps,   rep.kode)
+  const repSales       = filterByKode(allSales, rep.kode)
+  const repNps         = filterByKode(allNps,   rep.kode)
+  const repLeadMonthly = leadMonthly.filter(r => r.kode === rep.kode)
 
   // Current-month slices
-  const repSalesMonth = filterByDateRange(repSales, 'dato_kjopt',   currentMonthStart, todayStr)
-  const repLeadsMonth = filterByDateRange(repLeads, 'createdate',   currentMonthStart, todayStr)
-  const repNpsMonth   = filterByDateRange(repNps,   'submitted_at', currentMonthStart, todayStr)
+  const repSalesMonth     = filterByDateRange(repSales, 'dato_kjopt',   currentMonthStart, todayStr)
+  const repNpsMonth       = filterByDateRange(repNps,   'submitted_at', currentMonthStart, todayStr)
+  const repMonthLeadCount = repLeadMonthly
+    .filter(r => r.month === currentMonthKey)
+    .reduce((s, r) => s + Number(r.lead_count), 0)
 
   // Last-30-day slices
-  const repSales30 = filterByDateRange(repSales, 'dato_kjopt',   last30Start, todayStr)
-  const repLeads30 = filterByDateRange(repLeads, 'createdate',   last30Start, todayStr)
-  const repNps30   = filterByDateRange(repNps,   'submitted_at', last30Start, todayStr)
+  const repSales30         = filterByDateRange(repSales, 'dato_kjopt',   last30Start, todayStr)
+  const repNps30           = filterByDateRange(repNps,   'submitted_at', last30Start, todayStr)
+  const repLast30LeadCount = leadRange30
+    .filter(r => r.kode === rep.kode)
+    .reduce((s, r) => s + Number(r.lead_count), 0)
+
+  // Lead maps for team median
+  const currentMonthLeadMap = buildLeadMapForMonth(leadMonthly, currentMonthKey)
+  const last30LeadMap       = buildLeadMapFromRange(leadRange30)
 
   // Group all rep sales by 'YYYY-MM' key for the BonusPanel month selector
   const salesByMonth: Record<string, SaleRow[]> = {}
@@ -275,13 +309,13 @@ export function buildDashboard(
 
   return {
     rep,
-    currentMonth:        computeMetrics(repSalesMonth, repLeadsMonth, repNpsMonth),
-    last30Days:          computeMetrics(repSales30,    repLeads30,    repNps30),
-    medianCurrentMonth:  computeTeamMedian(allSales, allLeads, allNps, currentMonthStart, todayStr),
-    medianLast30Days:    computeTeamMedian(allSales, allLeads, allNps, last30Start, todayStr),
-    trend:               buildTrend(repSales, repLeads, repNps, year),
-    medianTrend:         buildMedianTrend(allSales, allLeads, allNps, year),
-    bonus:               computeBonus(rep, repSalesMonth, repLeadsMonth, repNpsMonth),
+    currentMonth:        computeMetrics(repSalesMonth, repMonthLeadCount, repNpsMonth),
+    last30Days:          computeMetrics(repSales30, repLast30LeadCount, repNps30),
+    medianCurrentMonth:  computeTeamMedian(allSales, currentMonthLeadMap, allNps, currentMonthStart, todayStr),
+    medianLast30Days:    computeTeamMedian(allSales, last30LeadMap,       allNps, last30Start,       todayStr),
+    trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
+    medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
+    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth),
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
     salesLast30Days:     repSales30,
     salesByMonth,

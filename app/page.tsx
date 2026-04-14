@@ -442,7 +442,7 @@ export default function Page() {
       )}
       {activeTab === 'stats' && (data.admin || data.teamView) && (
         <main className={`${shell} py-8`}>
-          <StatsTab />
+          <StatsTab defaultTlFilter={data.teamView ? data.rep.full_name : undefined} />
         </main>
       )}
     </div>
