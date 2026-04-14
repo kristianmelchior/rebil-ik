@@ -27,10 +27,9 @@ HEADERS      = {"Authorization": f"Bearer {HUBSPOT_API_KEY}"}
 
 BASE_PROPERTIES = [
     "dealname",
-    "hubspot_owner_id",
+    "referent___owner",
     "dealstage",
     "createdate",
-    "notes_last_updated",
     "notes_next_activity_date",
     "innbytte_",
     "type_lead",
@@ -80,6 +79,8 @@ def _search_deals(properties: list[str]) -> list[dict]:
             payload["after"] = after
 
         r = httpx.post(url, headers=HEADERS, json=payload, timeout=30)
+        if not r.is_success:
+            print(f"  HubSpot error {r.status_code}: {r.text}", file=sys.stderr)
         r.raise_for_status()
         data = r.json()
 
@@ -114,11 +115,10 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
     return {
         "deal_id":              deal["id"],
         "deal_name":            p.get("dealname"),
-        "owner_id":             p.get("hubspot_owner_id"),
+        "owner_id":             p.get("referent___owner"),
         "stage_id":             stage_id,
         "stage_name":           stage_name_map.get(stage_id),
         "create_date":          (p.get("createdate") or "")[:10] or None,
-        "last_activity_at":     p.get("notes_last_updated"),
         "last_stage_change_at": get_last_stage_change(p),
         "next_activity_date":   (p.get("notes_next_activity_date") or "")[:10] or None,
         "innbytte_":            p.get("innbytte_"),
