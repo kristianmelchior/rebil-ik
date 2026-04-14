@@ -10,6 +10,7 @@ Required env vars (GitHub Secrets):
 Pipeline config lives in config.py — not in secrets.
 """
 
+import json
 import os
 import sys
 import httpx
@@ -28,12 +29,7 @@ HEADERS      = {"Authorization": f"Bearer {HUBSPOT_API_KEY}"}
 BASE_PROPERTIES = [
     "dealname",
     "dealstage",
-    "pipeline",
     "createdate",
-]
-
-# Add these back one by one once BASE_PROPERTIES sync is confirmed working
-OPTIONAL_PROPERTIES = [
     "referent___owner",
     "notes_next_activity_date",
     "innbytte_",
@@ -50,27 +46,35 @@ def get_pipeline_stages(pipeline_id: str) -> list[dict]:
     return r.json().get("results", [])
 
 
-def get_valid_deal_properties() -> set[str]:
-    """Return the set of all existing deal property names from HubSpot."""
-    url = f"{HUBSPOT_BASE}/crm/v3/properties/deals"
-    r = httpx.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    return {p["name"] for p in r.json().get("results", [])}
-
-
-def _search_deals(properties: list[str]) -> list[dict]:
-    """Single paginated fetch with a fixed property list. Raises on HTTP errors."""
+def fetch_all_deals(properties: list[str]) -> list[dict]:
+    """Page through HubSpot CRM search API and return all deals in the pipeline."""
     url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
     deals = []
     after = None
+    first = True
 
     while True:
         payload: dict = {
+            "filterGroups": [
+                {
+                    "filters": [
+                        {
+                            "propertyName": "pipeline",
+                            "operator":     "EQ",
+                            "value":        PIPELINE_ID,
+                        }
+                    ]
+                }
+            ],
             "properties": properties,
             "limit":      100,
         }
         if after:
             payload["after"] = after
+
+        if first:
+            print(f"  Request body: {json.dumps(payload, indent=2)}")
+            first = False
 
         r = httpx.post(url, headers=HEADERS, json=payload, timeout=30)
         if not r.is_success:
@@ -86,11 +90,6 @@ def _search_deals(properties: list[str]) -> list[dict]:
             break
 
     return deals
-
-
-def fetch_all_deals(properties: list[str]) -> list[dict]:
-    """Fetch all deals. Filters properties against HubSpot's property registry first."""
-    return _search_deals(properties)
 
 
 # ── Transform ─────────────────────────────────────────────────────────────────
@@ -129,31 +128,18 @@ def main():
     stages         = get_pipeline_stages(PIPELINE_ID)
     stage_name_map = {s["id"]: s["label"] for s in stages}
     stage_ids      = [s["id"] for s in stages]
-    stage_labels = [s["id"] + " (" + s["label"] + ")" for s in stages]
-    print(f"  Stages: {stage_labels}")
 
-    valid_props      = get_valid_deal_properties()
-    stage_date_props = [f"hs_date_entered_{sid}" for sid in stage_ids]
-    all_wanted       = BASE_PROPERTIES + OPTIONAL_PROPERTIES + stage_date_props
-    properties       = [p for p in all_wanted if p in valid_props]
-    dropped          = [p for p in all_wanted if p not in valid_props]
-    if dropped:
-        print(f"  Skipping {len(dropped)} props not in HubSpot: {dropped}")
-    print(f"  Requesting properties: {properties}")
+    # hs_date_entered_ props don't appear in the Properties API but are
+    # returned by the search endpoint if requested directly.
+    properties = BASE_PROPERTIES + [f"hs_date_entered_{sid}" for sid in stage_ids]
+    print(f"  Requesting {len(properties)} properties")
 
     print("Fetching all deals from HubSpot…")
     all_deals = fetch_all_deals(properties)
     print(f"  {len(all_deals)} total deals fetched")
 
-    # Filter to this pipeline only, then apply stage exclusions
-    all_deals = [
-        d for d in all_deals
-        if d.get("properties", {}).get("pipeline") == PIPELINE_ID
-    ]
-    print(f"  {len(all_deals)} deals in pipeline {PIPELINE_ID}")
-
-    excluded    = set(EXCLUDED_STAGE_IDS)
-    active      = [d for d in all_deals if d.get("properties", {}).get("dealstage") not in excluded]
+    excluded     = set(EXCLUDED_STAGE_IDS)
+    active       = [d for d in all_deals if d.get("properties", {}).get("dealstage") not in excluded]
     closed_count = len(all_deals) - len(active)
     print(f"  {len(active)} active, {closed_count} excluded by config.py")
 
@@ -167,7 +153,6 @@ def main():
         supabase.table("deals_current").upsert(batch, on_conflict="deal_id").execute()
         print(f"  Batch {i // batch_size + 1}: {len(batch)} rows upserted")
 
-    # Remove deals no longer in the active set
     active_ids = [r["deal_id"] for r in rows]
     if active_ids:
         supabase.table("deals_current").delete().not_.in_("deal_id", active_ids).execute()
