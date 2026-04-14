@@ -81,6 +81,12 @@ function buildMetrics(
   const periodSales = sales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
   const periodNps   = nps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
 
+  // Pre-build lead count map for O(1) lookups (RPC returns one row per kode)
+  const leadCountMap = new Map<string, number>()
+  for (const l of leadsAgg) {
+    leadCountMap.set(l.kode, (leadCountMap.get(l.kode) ?? 0) + Number(l.lead_count))
+  }
+
   return reps.map(rep => {
     const k = rep.kode
 
@@ -89,7 +95,7 @@ function buildMetrics(
     const bilerKjopt = repSales.reduce((sum, s) => sum + (s.biler ?? 0), 0)
 
     // leads
-    const leadsCount = Number(leadsAgg.find(l => l.kode === k)?.lead_count ?? 0)
+    const leadsCount = leadCountMap.get(k) ?? 0
 
     // konvertering
     const konvertering = leadsCount === 0 ? null : (bilerKjopt / leadsCount) * 100
