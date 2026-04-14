@@ -14,7 +14,7 @@ import os
 import sys
 import httpx
 from supabase import create_client
-from config import PIPELINE_ID, EXCLUDED_STAGE_IDS
+from config import PIPELINE_ID, EXCLUDED_STAGE_IDS, STAGE_CATEGORY
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -123,6 +123,7 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
         "next_activity_date":   (p.get("notes_next_activity_date") or "")[:10] or None,
         "innbytte_":            p.get("innbytte_"),
         "type_lead":            p.get("type_lead"),
+        "category":             STAGE_CATEGORY.get(stage_id),
     }
 
 
