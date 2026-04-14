@@ -94,29 +94,20 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
 
 # ── Transform ─────────────────────────────────────────────────────────────────
 
-def get_last_stage_change(props: dict) -> str | None:
-    """Return when the deal entered its current stage."""
-    current_stage = props.get("dealstage")
-    if not current_stage:
-        return None
-    return props.get(f"hs_date_entered_{current_stage}")
-
-
 def to_row(deal: dict, stage_name_map: dict) -> dict:
     p        = deal.get("properties", {})
     stage_id = p.get("dealstage")
     return {
-        "deal_id":              deal["id"],
-        "deal_name":            p.get("dealname"),
-        "owner_id":             p.get("referent___owner"),
-        "stage_id":             stage_id,
-        "stage_name":           stage_name_map.get(stage_id),
-        "create_date":          (p.get("createdate") or "")[:10] or None,
-        "last_stage_change_at": get_last_stage_change(p),
-        "next_activity_date":   (p.get("notes_next_activity_date") or "")[:10] or None,
-        "innbytte_":            p.get("innbytte_"),
-        "type_lead":            p.get("type_lead"),
-        "category":             STAGE_CATEGORY.get(stage_id),
+        "deal_id":            deal["id"],
+        "deal_name":          p.get("dealname"),
+        "owner_id":           p.get("referent___owner"),
+        "stage_id":           stage_id,
+        "stage_name":         stage_name_map.get(stage_id),
+        "create_date":        (p.get("createdate") or "")[:10] or None,
+        "next_activity_date": (p.get("notes_next_activity_date") or "")[:10] or None,
+        "innbytte_":          p.get("innbytte_"),
+        "type_lead":          p.get("type_lead"),
+        "category":           STAGE_CATEGORY.get(stage_id),
     }
 
 
@@ -127,11 +118,8 @@ def main():
 
     stages         = get_pipeline_stages(PIPELINE_ID)
     stage_name_map = {s["id"]: s["label"] for s in stages}
-    stage_ids      = [s["id"] for s in stages]
 
-    # hs_date_entered_ props don't appear in the Properties API but are
-    # returned by the search endpoint if requested directly.
-    properties = BASE_PROPERTIES + [f"hs_date_entered_{sid}" for sid in stage_ids]
+    properties = BASE_PROPERTIES
     print(f"  Requesting {len(properties)} properties")
 
     print("Fetching all deals from HubSpot…")
