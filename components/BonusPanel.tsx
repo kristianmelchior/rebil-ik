@@ -77,23 +77,37 @@ export default function BonusPanel({
   // Available months sorted newest first
   const months = Object.keys(salesByMonth).sort((a, b) => b.localeCompare(a))
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey)
-  const [simConvRate,   setSimConvRate]   = useState(() => roundConvHalfStep(bonus.convRate))
-  const [simNpsScore,   setSimNpsScore]   = useState(bonus.npsScore ?? 40)
+  const [selectedMonth,    setSelectedMonth]    = useState(currentMonthKey)
+  const [simConvRate,      setSimConvRate]      = useState(() => roundConvHalfStep(bonus.convRate))
+  const [simNpsScore,      setSimNpsScore]      = useState(bonus.npsScore ?? 40)
+  const [simEstimatedCars, setSimEstimatedCars] = useState(bonus.carsThisMonth)
 
   // Re-sync from server when selecting inneværende måned (e.g. after viewing a past month)
   useEffect(() => {
     if (selectedMonth !== currentMonthKey) return
     setSimConvRate(roundConvHalfStep(bonus.convRate))
     setSimNpsScore(bonus.npsScore ?? 40)
+    setSimEstimatedCars(bonus.carsThisMonth)
   }, [selectedMonth, currentMonthKey, bonus])
 
+  // Per-car average from actual sales (null if no cars yet)
+  const perCarAvg = bonus.carsThisMonth > 0
+    ? Math.round(bonus.baseBonus / bonus.carsThisMonth)
+    : null
+
+  // Estimated base bonus: per-car avg × estimated cars (falls back to actual baseBonus if no avg yet)
+  const simEstimatedBaseBonus = perCarAvg !== null
+    ? perCarAvg * simEstimatedCars
+    : bonus.baseBonus
+
   // Derived what-if values — recalculated on every render from input state
-  const simConvFactor            = lookupConvFactor(simConvRate, rep.tier)
-  const simNpsBonus              = lookupNpsBonus(simNpsScore)
-  const simKonverteringsbonus    = Math.round(bonus.baseBonus * (simConvFactor - 1))
-  const simBonusEtterKonvertering = Math.round(bonus.baseBonus * simConvFactor)
-  const simTotalBonus            = simBonusEtterKonvertering + simNpsBonus
+  const simConvFactor             = lookupConvFactor(simConvRate, rep.tier)
+  const simNpsBonus               = lookupNpsBonus(simNpsScore)
+  const simKonverteringsbonus     = Math.round(simEstimatedBaseBonus * (simConvFactor - 1))
+  const simBonusEtterKonvertering = Math.round(simEstimatedBaseBonus * simConvFactor)
+  const simTotalBonus             = simBonusEtterKonvertering + simNpsBonus
+
+  const isEstimating = simEstimatedCars !== bonus.carsThisMonth
 
   function handleMonthChange(month: string) {
     setSelectedMonth(month)
@@ -113,11 +127,11 @@ export default function BonusPanel({
   const pastCarsCount   = pastSales.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
 
   // Display values — use what-if sim for current month, derived past data for other months
-  const displayBaseBonus          = isCurrentMonth ? bonus.baseBonus          : pastBaseBonus
-  const displayCarsCount          = isCurrentMonth ? bonus.carsThisMonth      : pastCarsCount
-  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus    : 0
-  const displayNpsBonus           = isCurrentMonth ? simNpsBonus              : 0
-  const displayTotal              = isCurrentMonth ? simTotalBonus            : pastBaseBonus
+  const displayBaseBonus          = isCurrentMonth ? simEstimatedBaseBonus : pastBaseBonus
+  const displayCarsCount          = isCurrentMonth ? simEstimatedCars      : pastCarsCount
+  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : 0
+  const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : 0
+  const displayTotal              = isCurrentMonth ? simTotalBonus         : pastBaseBonus
 
   return (
     <section>
@@ -143,6 +157,25 @@ export default function BonusPanel({
         <>
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Bonus</p>
           <div className="flex gap-4 mb-4">
+            {/* Estimated cars input */}
+            <div className="bg-surface border border-border rounded-card p-4 flex-1">
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Estimert antall biler</p>
+              <input
+                type="number"
+                step={1}
+                min={0}
+                value={simEstimatedCars}
+                onChange={e => {
+                  const v = parseInt(e.target.value, 10)
+                  setSimEstimatedCars(Number.isNaN(v) ? 0 : Math.max(0, v))
+                }}
+                className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none"
+              />
+              <p className="text-xs text-text-hint mt-1.5">
+                {bonus.carsThisMonth} solgt så langt
+              </p>
+            </div>
+
             {/* Konvertering what-if input */}
             <div className="bg-surface border border-border rounded-card p-4 flex-1">
               <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Konvertering</p>
@@ -202,7 +235,9 @@ export default function BonusPanel({
           <span className="text-text-primary">kr 0</span>
         </div>
         <div className="flex justify-between font-medium text-base border-t border-border pt-3.5 mt-1">
-          <span className="text-text-primary">Total bonus så langt</span>
+          <span className="text-text-primary">
+            {isCurrentMonth && isEstimating ? 'Estimert total bonus' : 'Total bonus så langt'}
+          </span>
           <span className="text-text-primary">{fmtKr(displayTotal)}</span>
         </div>
 
