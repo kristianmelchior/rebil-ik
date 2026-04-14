@@ -28,6 +28,7 @@ HEADERS      = {"Authorization": f"Bearer {HUBSPOT_API_KEY}"}
 BASE_PROPERTIES = [
     "dealname",
     "dealstage",
+    "pipeline",
     "createdate",
 ]
 
@@ -65,19 +66,8 @@ def _search_deals(properties: list[str]) -> list[dict]:
 
     while True:
         payload: dict = {
-            "properties":   properties,
-            "limit":        100,
-            "filterGroups": [
-                {
-                    "filters": [
-                        {
-                            "propertyName": "pipeline",
-                            "operator":     "EQ",
-                            "value":        PIPELINE_ID,
-                        }
-                    ]
-                }
-            ],
+            "properties": properties,
+            "limit":      100,
         }
         if after:
             payload["after"] = after
@@ -155,7 +145,13 @@ def main():
     all_deals = fetch_all_deals(properties)
     print(f"  {len(all_deals)} total deals fetched")
 
-    # Filter in Python so we can log the split
+    # Filter to this pipeline only, then apply stage exclusions
+    all_deals = [
+        d for d in all_deals
+        if d.get("properties", {}).get("pipeline") == PIPELINE_ID
+    ]
+    print(f"  {len(all_deals)} deals in pipeline {PIPELINE_ID}")
+
     excluded    = set(EXCLUDED_STAGE_IDS)
     active      = [d for d in all_deals if d.get("properties", {}).get("dealstage") not in excluded]
     closed_count = len(all_deals) - len(active)
