@@ -159,7 +159,7 @@ export async function GET(request: Request) {
       ),
     }
 
-    return Response.json(result, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json(result, { headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' } })
   } catch {
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }

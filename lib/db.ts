@@ -2,8 +2,13 @@
 // All functions throw on Supabase error — route handler catches and returns 500.
 
 import { randomUUID } from 'node:crypto'
+import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
 import type { Rep, SaleRow, LeadRow, NpsRow } from './types'
+
+// Cache TTLs (seconds)
+const TTL_SALES_DATA = 300  // 5 min — sales/leads/NPS shared across all users
+const TTL_REPS_DATA  = 600  // 10 min — rep list changes rarely
 
 function supabaseUrl(): string {
   return (
@@ -138,79 +143,101 @@ export async function getRepByKode(kode: string): Promise<Rep | null> {
 
 // Fetch team members for a teamleder — reps where teamleder = name, sorted by name.
 // Input: teamlederName (string)  Output: { kode, full_name }[]
-export async function getTeamMembers(teamlederName: string): Promise<{ kode: string; full_name: string }[]> {
-  const { data, error } = await supabase
-    .from('reps')
-    .select('kode, full_name')
-    .eq('teamleder', teamlederName)
-    .order('full_name')
-
-  if (error) throw error
-  return (data ?? []) as { kode: string; full_name: string }[]
-}
+export const getTeamMembers = unstable_cache(
+  async (teamlederName: string): Promise<{ kode: string; full_name: string }[]> => {
+    const { data, error } = await supabase
+      .from('reps')
+      .select('kode, full_name')
+      .eq('teamleder', teamlederName)
+      .order('full_name')
+    if (error) throw error
+    return (data ?? []) as { kode: string; full_name: string }[]
+  },
+  ['team-members'],
+  { revalidate: TTL_REPS_DATA, tags: ['reps-data'] }
+)
 
 // All reps with teamleder info — for stats table.
-export async function getAllRepsWithDetails(): Promise<{ kode: string; full_name: string; teamleder: string }[]> {
-  const { data, error } = await supabase
-    .from('reps')
-    .select('kode, full_name, teamleder')
-    .order('full_name')
-  if (error) throw error
-  return (data ?? []) as { kode: string; full_name: string; teamleder: string }[]
-}
+export const getAllRepsWithDetails = unstable_cache(
+  async (): Promise<{ kode: string; full_name: string; teamleder: string }[]> => {
+    const { data, error } = await supabase
+      .from('reps')
+      .select('kode, full_name, teamleder')
+      .order('full_name')
+    if (error) throw error
+    return (data ?? []) as { kode: string; full_name: string; teamleder: string }[]
+  },
+  ['all-reps-details'],
+  { revalidate: TTL_REPS_DATA, tags: ['reps-data'] }
+)
 
 // All reps for admin picker — kode + full_name only, sorted by name.
-export async function getAllRepsForPicker(): Promise<{ kode: string; full_name: string }[]> {
-  const { data, error } = await supabase
-    .from('reps')
-    .select('kode, full_name')
-    .order('full_name')
-
-  if (error) throw error
-  return (data ?? []) as { kode: string; full_name: string }[]
-}
+export const getAllRepsForPicker = unstable_cache(
+  async (): Promise<{ kode: string; full_name: string }[]> => {
+    const { data, error } = await supabase
+      .from('reps')
+      .select('kode, full_name')
+      .order('full_name')
+    if (error) throw error
+    return (data ?? []) as { kode: string; full_name: string }[]
+  },
+  ['all-reps-picker'],
+  { revalidate: TTL_REPS_DATA, tags: ['reps-data'] }
+)
 
 // Fetch all sales rows for a given year (all reps — used for team median).
 // Input: year (number)  Output: SaleRow[]
-export async function getAllSales(year: number): Promise<SaleRow[]> {
-  return fetchAll<SaleRow>((from, to) =>
-    supabase
-      .from('sales')
-      .select('*')
-      .gte('dato_kjopt', `${year}-01-01`)
-      .lte('dato_kjopt', `${year}-12-31`)
-      .range(from, to)
-  )
-}
+export const getAllSales = unstable_cache(
+  async (year: number): Promise<SaleRow[]> => {
+    return fetchAll<SaleRow>((from, to) =>
+      supabase
+        .from('sales')
+        .select('*')
+        .gte('dato_kjopt', `${year}-01-01`)
+        .lte('dato_kjopt', `${year}-12-31`)
+        .range(from, to)
+    )
+  },
+  ['all-sales'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
 
 // Fetch all leads rows for a given year where teller_lead = true.
 // Input: year (number)  Output: LeadRow[]
-export async function getAllLeads(year: number): Promise<LeadRow[]> {
-  return fetchAll<LeadRow>((from, to) =>
-    supabase
-      .from('leads')
-      .select('*')
-      .eq('teller_lead', true)
-      .gte('createdate', `${year}-01-01`)
-      .lte('createdate', `${year}-12-31`)
-      .range(from, to)
-  )
-}
+export const getAllLeads = unstable_cache(
+  async (year: number): Promise<LeadRow[]> => {
+    return fetchAll<LeadRow>((from, to) =>
+      supabase
+        .from('leads')
+        .select('*')
+        .eq('teller_lead', true)
+        .gte('createdate', `${year}-01-01`)
+        .lte('createdate', `${year}-12-31`)
+        .range(from, to)
+    )
+  },
+  ['all-leads'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
 
 // Fetch all NPS rows for a given year, excluding null/zz_unknown kodes.
 // Input: year (number)  Output: NpsRow[]
-export async function getAllNps(year: number): Promise<NpsRow[]> {
-  return fetchAll<NpsRow>((from, to) =>
-    supabase
-      .from('nps')
-      .select('*')
-      .not('kode', 'is', null)
-      .neq('kode', 'zz_unknown')
-      .gte('month', `${year}-01-01`)
-      .lte('month', `${year}-12-31`)
-      .range(from, to)
-  )
-}
+export const getAllNps = unstable_cache(
+  async (year: number): Promise<NpsRow[]> => {
+    return fetchAll<NpsRow>((from, to) =>
+      supabase
+        .from('nps')
+        .select('*')
+        .not('kode', 'is', null)
+        .neq('kode', 'zz_unknown')
+        .gte('month', `${year}-01-01`)
+        .lte('month', `${year}-12-31`)
+        .range(from, to)
+    )
+  },
+  ['all-nps'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
 
 // Fetch NPS rows for a single rep by kode, full year, sorted by submitted_at desc.
 // Input: kode (string), year (number)  Output: NpsRow[]

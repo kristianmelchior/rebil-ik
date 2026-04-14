@@ -166,7 +166,7 @@ export async function GET(request: Request) {
     const rows = buildMetrics(sales, leads, nps, from, to, activeReps)
 
     return Response.json({ rows, from, to } satisfies StatsData, {
-      headers: { 'Cache-Control': 'no-store' },
+      headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' },
     })
   } catch {
     return Response.json({ error: 'Internal server error' }, { status: 500 })

@@ -70,7 +70,7 @@ export async function GET() {
       const reps = await getAllRepsForPicker()
       return Response.json(
         { ...dashboard, admin: { reps } },
-        { headers: { 'Cache-Control': 'no-store' } }
+        { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } }
       )
     }
 
@@ -78,7 +78,7 @@ export async function GET() {
       const teamReps = await getTeamMembers(sessionRep.full_name)
       return Response.json(
         { ...dashboard, teamView: { reps: teamReps } },
-        { headers: { 'Cache-Control': 'no-store' } }
+        { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } }
       )
     }
 
