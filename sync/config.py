@@ -1,8 +1,37 @@
 # sync/config.py — HubSpot pipeline configuration.
 # Edit this file when stage IDs change, then commit.
-# Run sync.py once without filters first to discover all stage IDs.
+# Run discover_pipelines.py to find stage IDs and labels.
 
 PIPELINE_ID = "22294509"
+
+# Maps stage ID → human-readable stage name.
+# Hardcoded to avoid a live API call on every sync run.
+# Update when stages change (run discover_pipelines.py to get current labels).
+STAGE_NAME_MAP: dict[str, str] = {
+    "5095786727": "Pool winback leads",
+    "1446317287": "Lead qualification",
+    "188841923":  "Nye leads",
+    "1992087774": "Ferdig estimert",
+    "4610331873": "Innbytte - send til Retail",
+    "74384847":   "Kontaktforsøk 1 + SMS",
+    "71217910":   "Kontaktforsøk 2",
+    "1795037396": "Henter inn bud - plattform & prising",
+    "434020796":  "Venter på bud",
+    "519657156":  "Tilbud klart",
+    "519657157":  "KF1",
+    "519657158":  "KF2",
+    "431588053":  "Send tilbud",
+    "189321201":  "Lead, tilbud sendt",
+    "122403776":  "Kontaktforsøk 1 + SMS, lead",
+    "122403777":  "Kontaktforsøk 2, lead",
+    "141045495":  "I dialog med kunde",
+    "185258735":  "Hot lead",
+    "188827594":  "Videovisning avtalt",
+    "188827595":  "Videovisning under arbeid",
+    "188827596":  "Aksept/Få slettebekreftelse/lage kontrakt",
+    "188827597":  "Kontrakt signert",
+    "3677025490": "Rebil salgshjeeeelp",
+}
 
 # Maps stage ID → category label shown in the dashboard.
 STAGE_CATEGORY: dict[str, str] = {

@@ -8,13 +8,15 @@ import { isTlSuperadmin } from '@/lib/tl/superadmin'
 
 export async function GET() {
   const cookieStore = await cookies()
-  const kode = cookieStore.get(SESSION_COOKIE_NAME)?.value
-  if (!kode) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const rep = await getRepByKode(kode)
-  if (!rep || !isTlSuperadmin(rep.email)) {
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const isSuperSession = session.startsWith('__tl_super__')
+  const superEmail     = isSuperSession ? session.replace('__tl_super__', '') : null
+  const rep            = isSuperSession ? null : await getRepByKode(session)
+
+  const allowed = (isSuperSession && isTlSuperadmin(superEmail)) || (rep && isTlSuperadmin(rep.email))
+  if (!allowed) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   try {
     const reps = await getAllRepsAdmin()

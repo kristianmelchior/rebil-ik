@@ -1,21 +1,29 @@
 """
-sync.py — HubSpot → Supabase deals_current sync
+sync.py — HubSpot → Supabase deals_current incremental sync.
 Runs every 15 min via GitHub Actions.
+
+Strategy:
+  1. Search for deals modified in the last SYNC_WINDOW_MINUTES (time filter,
+     no stage filter) — avoids 400 from pipeline/stage IN filters.
+  2. Deals still in an active stage → upsert into deals_current.
+  3. Deals that moved to a non-active stage → delete from deals_current.
+
+Stage names come from STAGE_NAME_MAP in config.py — no API call needed.
 
 Required env vars (GitHub Secrets):
   HUBSPOT_API_KEY       HubSpot Private App token
   SUPABASE_URL          Supabase project URL
   SUPABASE_SERVICE_KEY  Supabase service role key (bypasses RLS)
-
-Pipeline config lives in config.py — not in secrets.
 """
 
-import json
 import os
 import sys
+from datetime import datetime, timezone, timedelta
+
 import httpx
 from supabase import create_client
-from config import PIPELINE_ID, ACTIVE_STAGE_IDS, EXCLUDED_STAGE_IDS, STAGE_CATEGORY
+
+from config import PIPELINE_ID, ACTIVE_STAGE_IDS, STAGE_CATEGORY, STAGE_NAME_MAP
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
@@ -25,6 +33,10 @@ SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 
 HUBSPOT_BASE = "https://api.hubapi.com"
 HEADERS      = {"Authorization": f"Bearer {HUBSPOT_API_KEY}"}
+
+# Window for incremental sync. Larger than the sync interval (15 min)
+# to handle clock skew. 30 min gives comfortable overlap.
+SYNC_WINDOW_MINUTES = 30
 
 BASE_PROPERTIES = [
     "dealname",
@@ -40,33 +52,32 @@ BASE_PROPERTIES = [
 
 # ── HubSpot helpers ───────────────────────────────────────────────────────────
 
-def get_pipeline_stages(pipeline_id: str) -> list[dict]:
-    """Fetch all stages for a pipeline."""
-    url = f"{HUBSPOT_BASE}/crm/v3/pipelines/deals/{pipeline_id}/stages"
-    r = httpx.get(url, headers=HEADERS, timeout=30)
-    r.raise_for_status()
-    return r.json().get("results", [])
+def fetch_recently_modified_deals(properties: list[str]) -> list[dict]:
+    """
+    Search for ALL deals modified in the last SYNC_WINDOW_MINUTES.
+    Uses a time filter — avoids 400 errors from pipeline/stage IN filters.
+    Returns both active and newly-inactive deals so we can upsert or delete.
 
+    Expected API calls: ceil(n_modified / 100) — typically 1 per run.
+    """
+    since_ms = int(
+        (datetime.now(timezone.utc) - timedelta(minutes=SYNC_WINDOW_MINUTES))
+        .timestamp() * 1000
+    )
 
-def fetch_all_deals(properties: list[str]) -> list[dict]:
-    """Page through HubSpot CRM search API and return all active deals."""
     url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
     deals = []
     after = None
 
     while True:
         payload: dict = {
-            "filterGroups": [
-                {
-                    "filters": [
-                        {
-                            "propertyName": "dealstage",
-                            "operator":     "IN",
-                            "values":       ACTIVE_STAGE_IDS,
-                        }
-                    ]
-                }
-            ],
+            "filterGroups": [{
+                "filters": [{
+                    "propertyName": "hs_lastmodifieddate",
+                    "operator":     "GTE",
+                    "value":        str(since_ms),
+                }]
+            }],
             "properties": properties,
             "limit":      100,
         }
@@ -78,11 +89,9 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
             print(f"  HubSpot error {r.status_code}: {r.text}", file=sys.stderr)
         r.raise_for_status()
         data = r.json()
-
         deals.extend(data.get("results", []))
 
-        paging = data.get("paging", {})
-        after  = paging.get("next", {}).get("after")
+        after = data.get("paging", {}).get("next", {}).get("after")
         if not after:
             break
 
@@ -91,7 +100,7 @@ def fetch_all_deals(properties: list[str]) -> list[dict]:
 
 # ── Transform ─────────────────────────────────────────────────────────────────
 
-def to_row(deal: dict, stage_name_map: dict) -> dict:
+def to_row(deal: dict) -> dict:
     p        = deal.get("properties", {})
     stage_id = p.get("dealstage")
     return {
@@ -99,7 +108,7 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
         "deal_name":          p.get("dealname"),
         "owner_id":           p.get("referent___owner"),
         "stage_id":           stage_id,
-        "stage_name":         stage_name_map.get(stage_id),
+        "stage_name":         STAGE_NAME_MAP.get(stage_id),
         "create_date":        p.get("createdate"),
         "last_activity_at":   p.get("notes_last_updated"),
         "last_modified_at":   p.get("hs_lastmodifieddate"),
@@ -114,29 +123,29 @@ def to_row(deal: dict, stage_name_map: dict) -> dict:
 
 def main():
     print(f"Pipeline: {PIPELINE_ID}")
+    print(f"Sync window: last {SYNC_WINDOW_MINUTES} minutes")
 
-    stages         = get_pipeline_stages(PIPELINE_ID)
-    stage_name_map = {s["id"]: s["label"] for s in stages}
+    print("Fetching recently modified deals from HubSpot…")
+    all_deals = fetch_recently_modified_deals(BASE_PROPERTIES)
+    print(f"  {len(all_deals)} deals modified in window")
 
-    properties = BASE_PROPERTIES
-    print(f"  Requesting {len(properties)} properties")
+    active_deals = [d for d in all_deals if d.get("properties", {}).get("dealstage") in ACTIVE_STAGE_IDS]
+    inactive_ids = [d["id"] for d in all_deals if d.get("properties", {}).get("dealstage") not in ACTIVE_STAGE_IDS]
 
-    print("Fetching all deals from HubSpot…")
-    all_deals = fetch_all_deals(properties)
-    print(f"  {len(all_deals)} active deals fetched")
+    print(f"  {len(active_deals)} still active, {len(inactive_ids)} moved to non-active stage")
 
-    rows = [to_row(d, stage_name_map) for d in all_deals]
-
-    print("Writing to Supabase deals_current…")
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
-    supabase.table("deals_current").delete().neq("deal_id", "").execute()
-    print("  Table cleared")
 
-    batch_size = 500
-    for b, i in enumerate(range(0, len(rows), batch_size)):
-        batch = rows[i : i + batch_size]
-        supabase.table("deals_current").insert(batch).execute()
-        print(f"  Batch {b + 1}: {len(batch)} rows inserted")
+    if active_deals:
+        rows = [to_row(d) for d in active_deals]
+        batch_size = 500
+        for i in range(0, len(rows), batch_size):
+            supabase.table("deals_current").upsert(rows[i : i + batch_size], on_conflict="deal_id").execute()
+        print(f"  Upserted {len(rows)} active deal(s)")
+
+    if inactive_ids:
+        supabase.table("deals_current").delete().in_("deal_id", inactive_ids).execute()
+        print(f"  Deleted {len(inactive_ids)} deal(s) no longer in active stages")
 
     print("Done.")
 

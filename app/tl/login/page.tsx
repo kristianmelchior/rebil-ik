@@ -19,7 +19,7 @@ export default function TlLoginPage() {
     await getSupabaseBrowserClient().auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/tl`,
+        redirectTo: `${window.location.origin}/tl/auth/callback`,
       },
     })
     setLoading(false)

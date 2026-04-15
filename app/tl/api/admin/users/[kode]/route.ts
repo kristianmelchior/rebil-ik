@@ -13,13 +13,15 @@ export async function PATCH(
   { params }: { params: Promise<{ kode: string }> }
 ) {
   const cookieStore = await cookies()
-  const sessionKode = cookieStore.get(SESSION_COOKIE_NAME)?.value
-  if (!sessionKode) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = cookieStore.get(SESSION_COOKIE_NAME)?.value
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const admin = await getRepByKode(sessionKode)
-  if (!admin || !isTlSuperadmin(admin.email)) {
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const isSuperSession = session.startsWith('__tl_super__')
+  const superEmail     = isSuperSession ? session.replace('__tl_super__', '') : null
+  const admin          = isSuperSession ? null : await getRepByKode(session)
+
+  const allowed = (isSuperSession && isTlSuperadmin(superEmail)) || (admin && isTlSuperadmin(admin.email))
+  if (!allowed) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { kode } = await params
   let body: { rolle?: unknown }

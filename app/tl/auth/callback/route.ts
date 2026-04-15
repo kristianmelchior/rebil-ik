@@ -1,7 +1,5 @@
-// GET /auth/callback
-// Server-side OAuth callback. createServerClient reads the PKCE code
-// verifier from the request cookies (set by createBrowserClient in AuthGate),
-// exchanges the code, looks up the rep by email, and sets the session cookie.
+// GET /tl/auth/callback
+// TL-specific OAuth callback — always redirects to /tl after setting session.
 
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
@@ -12,27 +10,23 @@ import { isTlSuperadmin } from '@/lib/tl/superadmin'
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
-  const code = searchParams.get('code')
+  const code       = searchParams.get('code')
   const errorParam = searchParams.get('error_description') ?? searchParams.get('error')
 
   if (errorParam) {
-    return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(errorParam)}`)
+    return NextResponse.redirect(`${origin}/tl/login?auth_error=${encodeURIComponent(errorParam)}`)
   }
-
   if (!code) {
-    return NextResponse.redirect(`${origin}/?auth_error=no_code`)
+    return NextResponse.redirect(`${origin}/tl/login?auth_error=no_code`)
   }
 
   const cookieStore = await cookies()
-
-  const supabase = createServerClient(
+  const supabase    = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
+        getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
           for (const { name, value, options } of cookiesToSet) {
             cookieStore.set(name, value, options)
@@ -45,32 +39,26 @@ export async function GET(request: Request) {
   const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
   if (error || !data.session?.user?.email) {
-    console.error('[callback] exchangeCodeForSession failed:', error?.message ?? 'no email')
     const msg = error?.message ?? 'Exchange failed'
-    return NextResponse.redirect(`${origin}/?auth_error=${encodeURIComponent(msg)}`)
+    return NextResponse.redirect(`${origin}/tl/login?auth_error=${encodeURIComponent(msg)}`)
   }
 
-  const email = data.session.user.email!
+  const email = data.session.user.email
   const rep   = await getRepByEmail(email)
 
   if (!rep && !isTlSuperadmin(email)) {
-    console.error('[callback] No rep for email:', email)
     return NextResponse.redirect(`${origin}/tl/login?auth_error=not_employee`)
   }
 
-  // Superadmins without a rep entry use their email as session value
   const sessionValue = rep ? rep.kode : `__tl_super__${email}`
 
   cookieStore.set(SESSION_COOKIE_NAME, sessionValue, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure:   process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: SESSION_MAX_AGE_SEC,
-    path: '/',
+    maxAge:   SESSION_MAX_AGE_SEC,
+    path:     '/',
   })
 
-  // Support ?next= for multi-app redirects (e.g. /tl after TL login)
-  const next = searchParams.get('next')
-  const destination = next && /^\/[^/]/.test(next) ? next : '/'
-  return NextResponse.redirect(`${origin}${destination}`)
+  return NextResponse.redirect(`${origin}/tl`)
 }
