@@ -35,10 +35,12 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Missing kode' }, { status: 400 })
   }
 
-  // Validate target rep is on the teamleder's team
-  const targetRep = await getRepByKode(kode)
-  if (!targetRep || targetRep.teamleder !== sessionRep.full_name) {
-    return Response.json({ error: 'Not on your team' }, { status: 403 })
+  // Teamleder kan alltid se seg selv, ellers sjekk teamtilhørighet
+  if (kode !== sessionKode) {
+    const targetRep = await getRepByKode(kode)
+    if (!targetRep || targetRep.teamleder !== sessionRep.full_name) {
+      return Response.json({ error: 'Not on your team' }, { status: 403 })
+    }
   }
 
   cookieStore.set(TEAM_VIEW_KODE_COOKIE_NAME, kode, {

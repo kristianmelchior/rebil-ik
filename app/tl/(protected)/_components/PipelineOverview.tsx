@@ -103,7 +103,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
 
   function copyForSlack(name: string, deals: RottenDeal[]) {
     const lines = [
-      `*Rotten deals — ${name.trim()}* (${deals.length} vist)`,
+      `*Over grense — ${name.trim()}* (${deals.length} vist)`,
       '',
       ...deals.map(d => {
         const neste = d.next_activity_date
@@ -151,7 +151,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
                   </div>
                   {cat.rottenCount > 0 ? (
                     <>
-                      <div className="text-sm font-semibold text-[#A32D2D]">{cat.rottenCount} rotten</div>
+                      <div className="text-sm font-semibold text-[#A32D2D]">{cat.rottenCount} over grense</div>
                       <div className="text-[11px] text-[#185FA5] opacity-60">av {cat.count}</div>
                     </>
                   ) : (
@@ -166,7 +166,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
         {/* ── Flags placeholder ──────────────────────────────────────────── */}
         <div className="border-t border-border px-4 py-3">
           <div className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-3">Flags</div>
-          <p className="text-sm text-text-muted text-center py-4">Kommer snart — rotten deals og varsler vises her</p>
+          <p className="text-sm text-text-muted text-center py-4">Kommer snart — over grense og varsler vises her</p>
         </div>
 
         {/* ── Deepdive table ─────────────────────────────────────────────── */}
@@ -204,7 +204,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
                               <button
                                 onClick={() => void toggleRep(rep.name)}
                                 className="text-text-muted hover:text-text-primary transition-colors"
-                                title="Se rotten deals"
+                                title="Se over grense"
                               >
                                 <svg
                                   className={`w-3 h-3 transition-transform duration-150 ${isExpanded ? 'rotate-90' : ''}`}
@@ -249,7 +249,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
                                 <p className="text-xs text-[#A32D2D] py-1">Feil ved lasting</p>
                               )}
                               {Array.isArray(deals) && deals.length === 0 && (
-                                <p className="text-xs text-text-muted py-1">Ingen rotten deals funnet</p>
+                                <p className="text-xs text-text-muted py-1">Ingen over grense funnet</p>
                               )}
                               {Array.isArray(deals) && deals.length > 0 && (
                                 <>
@@ -340,7 +340,7 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
               <span className="text-text-muted">{s.stageName}</span>
               <span className="font-medium text-text-primary">
                 {s.rottenCount > 0
-                  ? <span className="text-[#A32D2D]">{s.rottenCount}/{s.count} rotten</span>
+                  ? <span className="text-[#A32D2D]">{s.rottenCount}/{s.count} over grense</span>
                   : s.count}
               </span>
             </div>

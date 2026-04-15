@@ -3,6 +3,7 @@
 // Entry — dashboard + Boooom! feed tab; session cookie or admin.
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import Image from 'next/image'
 import type { RepDashboard, SaleRow, NpsRow } from '@/lib/types'
 import AuthGate from '@/components/AuthGate'
@@ -11,7 +12,6 @@ import TrendCharts from '@/components/TrendCharts'
 import InsightTiles from '@/components/InsightTiles'
 import { buildPrisSlices } from '@/components/BreakdownTile'
 import BonusPanel from '@/components/BonusPanel'
-import CarsTable from '@/components/CarsTable'
 import FeedTab from '@/components/FeedTab'
 import NpsTab from '@/components/NpsTab'
 import ToplistTab from '@/components/ToplistTab'
@@ -379,17 +379,12 @@ export default function Page() {
 
           {/* Se stats — admin/teamleder only, pushed to the right */}
           {(data.admin || data.teamView) && (
-            <button
-              type="button"
-              onClick={() => setActiveTab('stats')}
-              className={`ml-auto my-2 text-sm font-medium px-4 py-1.5 rounded-lg transition-colors ${
-                activeTab === 'stats'
-                  ? 'bg-[var(--rebil-red)] text-white'
-                  : 'bg-text-primary text-white hover:opacity-80'
-              }`}
+            <Link
+              href="/tl/tabell"
+              className="ml-auto my-2 text-sm font-medium px-4 py-1.5 rounded-lg bg-text-primary text-white hover:opacity-80 transition-opacity"
             >
               Se stats
-            </button>
+            </Link>
           )}
         </div>
       </nav>
@@ -422,7 +417,6 @@ export default function Page() {
             lastUpdated={data.lastUpdated}
             onMonthChange={setSelectedMonth}
           />
-          <CarsTable sales={data.salesByMonth[selectedMonth] ?? []} />
         </main>
       )}
       {activeTab === 'toplist' && (

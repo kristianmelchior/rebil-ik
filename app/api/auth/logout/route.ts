@@ -5,6 +5,7 @@ import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   ADMIN_VIEW_KODE_COOKIE_NAME,
+  TEAM_VIEW_KODE_COOKIE_NAME,
 } from '@/lib/auth'
 
 export async function POST() {
@@ -12,5 +13,6 @@ export async function POST() {
   cookieStore.delete(SESSION_COOKIE_NAME)
   cookieStore.delete(ADMIN_SESSION_COOKIE_NAME)
   cookieStore.delete(ADMIN_VIEW_KODE_COOKIE_NAME)
+  cookieStore.delete(TEAM_VIEW_KODE_COOKIE_NAME)
   return Response.json({ ok: true })
 }

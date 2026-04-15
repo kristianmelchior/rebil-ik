@@ -23,7 +23,8 @@ export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
   }
 
   const navLinks = [
-    { href: '/tl',       label: 'Pipeline' },
+    { href: '/tl',        label: 'Oversikt' },
+    { href: '/tl/tabell', label: 'Tabell'   },
     ...(isAdmin ? [{ href: '/tl/admin', label: 'Administrer' }] : []),
   ]
 
@@ -64,7 +65,15 @@ export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
         )}
       </div>
 
-      <span className="text-sm text-text-muted">{displayName}</span>
+      <div className="flex items-center gap-4">
+        <span className="text-sm text-text-muted">{displayName}</span>
+        <Link
+          href="/"
+          className="text-xs text-text-muted hover:text-text-primary border border-border rounded px-3 py-1.5 transition-colors hover:bg-[#F5F5F5]"
+        >
+          ← IK-dash
+        </Link>
+      </div>
     </header>
   )
 }

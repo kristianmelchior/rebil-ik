@@ -94,9 +94,9 @@ export default function RottenRulesSection() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold text-text-primary">Rotten deals</h2>
+        <h2 className="text-lg font-semibold text-text-primary">Over grense</h2>
         <p className="text-sm text-text-muted mt-1">
-          Velg hvilken dato og antall arbeidsdager (man–fre) som skal til før en deal markeres som rotten.
+          Velg hvilken dato og antall arbeidsdager (man–fre) som skal til før en deal markeres som over grense.
         </p>
       </div>
 

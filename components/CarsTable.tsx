@@ -7,16 +7,21 @@ import { fmtKr, fmtDatoKjoptShort } from '@/lib/formatDisplay'
 import { prisgrenseChipClass, HUBSPOT_SALES_DEAL_BASE } from '@/lib/rabattBadge'
 
 interface CarsTableProps {
-  sales: SaleRow[]
+  sales:      SaleRow[]
+  convFactor?: number
 }
 
-export default function CarsTable({ sales }: CarsTableProps) {
+export default function CarsTable({ sales, convFactor = 1 }: CarsTableProps) {
   // Sort descending by date
   const sorted = [...sales].sort((a, b) => b.dato_kjopt.localeCompare(a.dato_kjopt))
 
-  const totalBiler     = sorted.reduce((sum, r) => sum + r.biler,     0)
-  const totalBrutto    = sorted.reduce((sum, r) => sum + r.brutto,    0)
-  const totalBonus = sorted.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
+  const totalBiler  = sorted.reduce((sum, r) => sum + r.biler,     0)
+  const totalBrutto = sorted.reduce((sum, r) => sum + r.brutto,    0)
+  const totalBonus  = sorted.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
+  const totalEstMKonv = Math.round(totalBonus * convFactor)
+
+  const HEADERS = ['Bil', 'Type', 'Dato', 'Innkjøpspris', 'Pris', 'Prisgrense', 'Bonusbidrag', 'Est m konv']
+  const RIGHT_ALIGN = new Set([3, 4, 6, 7])
 
   return (
     <>
@@ -27,10 +32,10 @@ export default function CarsTable({ sales }: CarsTableProps) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              {['Bil', 'Type', 'Dato', 'Innkjøpspris', 'Pris', 'Prisgrense', 'Bonusbidrag'].map((h, i) => (
+              {HEADERS.map((h, i) => (
                 <th
                   key={h}
-                  className={`px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider ${i === 3 || i === 4 || i === 6 ? 'text-right' : 'text-left'}`}
+                  className={`px-4 py-3 text-xs font-medium text-text-muted uppercase tracking-wider ${RIGHT_ALIGN.has(i) ? 'text-right' : 'text-left'}`}
                 >
                   {h}
                 </th>
@@ -39,10 +44,10 @@ export default function CarsTable({ sales }: CarsTableProps) {
           </thead>
           <tbody>
             {sorted.map(row => {
-              const chipCls = prisgrenseChipClass(row.prisgrense)
+              const chipCls   = prisgrenseChipClass(row.prisgrense)
+              const estMKonv  = row.bonus != null ? Math.round(row.bonus * convFactor) : null
               return (
                 <tr key={row.id} className="border-b border-[#F0F0F0] hover:bg-bg">
-                  {/* Bil — sales.navn; link to HubSpot deal when hs_deal_id present */}
                   <td className="px-4 py-3 text-text-primary">
                     {row.hs_deal_id ? (
                       <a
@@ -77,6 +82,9 @@ export default function CarsTable({ sales }: CarsTableProps) {
                   <td className="px-4 py-3 text-text-primary text-right">
                     {row.bonus != null ? fmtKr(row.bonus) : '—'}
                   </td>
+                  <td className="px-4 py-3 text-text-primary text-right font-medium">
+                    {estMKonv != null ? fmtKr(estMKonv) : '—'}
+                  </td>
                 </tr>
               )
             })}
@@ -90,6 +98,7 @@ export default function CarsTable({ sales }: CarsTableProps) {
               <td className="px-4 py-3 text-right">{fmtKr(totalBrutto)}</td>
               <td className="px-4 py-3">—</td>
               <td className="px-4 py-3 text-right">{fmtKr(totalBonus)}</td>
+              <td className="px-4 py-3 text-right">{fmtKr(totalEstMKonv)}</td>
             </tr>
           </tfoot>
         </table>

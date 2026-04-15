@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import type { BonusResult, Rep, SaleRow } from '@/lib/types'
+import CarsTable from '@/components/CarsTable'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
 
@@ -247,6 +248,11 @@ export default function BonusPanel({
             : 'Avsluttet måned — endelige tall'}
         </p>
       </div>
+
+      <CarsTable
+        sales={salesByMonth[selectedMonth] ?? []}
+        convFactor={isCurrentMonth ? simConvFactor : 1}
+      />
     </section>
   )
 }
