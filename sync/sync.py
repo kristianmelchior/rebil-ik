@@ -15,6 +15,18 @@ If the fetch fails, we abort before touching Supabase — data stays intact.
 import os
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+# Local dev: load ../.env.local if present (no-op in GitHub Actions)
+_env_file = Path(__file__).parent.parent / '.env.local'
+if _env_file.exists():
+    for _line in _env_file.read_text().splitlines():
+        if '=' in _line and not _line.startswith('#'):
+            _k, _, _v = _line.partition('=')
+            os.environ.setdefault(_k.strip(), _v.strip())
+    # Map Next.js variable names → sync script names
+    os.environ.setdefault('SUPABASE_URL',         os.environ.get('NEXT_PUBLIC_SUPABASE_URL', ''))
+    os.environ.setdefault('SUPABASE_SERVICE_KEY',  os.environ.get('SUPABASE_SERVICE_ROLE_KEY', ''))
 
 import httpx
 from supabase import create_client
@@ -48,28 +60,30 @@ MIN_EXPECTED_DEALS = 100
 
 # ── HubSpot ───────────────────────────────────────────────────────────────────
 
-def fetch_all_pipeline_deals(properties: list[str]) -> list[dict]:
+def search_stages_batch(stage_ids: list[str], properties: list[str]) -> list[dict]:
     """
-    Fetch ALL non-archived deals using the list endpoint (no filter needed).
-    Filters to active pipeline stages client-side.
-    Uses GET /crm/v3/objects/deals — avoids 400 errors from unsupported
-    search filters (pipeline EQ and dealstage IN both fail on this account).
+    Search for deals in a batch of stages using filterGroups (OR logic).
+    Max 5 filterGroups per HubSpot request — one EQ filter per stage.
     """
-    props_param = ",".join(properties)
-    url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals"
+    url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
     deals = []
     after = None
 
+    filter_groups = [
+        {"filters": [{"propertyName": "dealstage", "operator": "EQ", "value": sid}]}
+        for sid in stage_ids
+    ]
+
     while True:
-        params: dict = {
-            "properties": props_param,
-            "limit":      100,
-            "archived":   "false",
+        payload: dict = {
+            "filterGroups": filter_groups,
+            "properties":   properties,
+            "limit":        100,
         }
         if after:
-            params["after"] = after
+            payload["after"] = after
 
-        r = httpx.get(url, headers=HEADERS, params=params, timeout=30)
+        r = httpx.post(url, headers=HEADERS, json=payload, timeout=30)
         if not r.is_success:
             print(f"  HubSpot error {r.status_code}: {r.text}", file=sys.stderr)
         r.raise_for_status()
@@ -80,8 +94,30 @@ def fetch_all_pipeline_deals(properties: list[str]) -> list[dict]:
         if not after:
             break
 
-    print(f"  {len(deals)} total non-archived deals fetched")
     return deals
+
+
+def fetch_all_pipeline_deals(properties: list[str]) -> list[dict]:
+    """
+    Fetch all deals in active stages by batching stages into groups of 5
+    (HubSpot max filterGroups per request). Each batch uses OR logic via
+    filterGroups with dealstage EQ — avoids the 400 from dealstage IN.
+    """
+    BATCH = 5
+    all_deals: list[dict] = []
+
+    for i in range(0, len(ACTIVE_STAGE_IDS), BATCH):
+        batch = ACTIVE_STAGE_IDS[i : i + BATCH]
+        deals = search_stages_batch(batch, properties)
+        all_deals.extend(deals)
+        print(f"  Batch {i // BATCH + 1}: {len(deals)} deals (stages {i+1}–{min(i+BATCH, len(ACTIVE_STAGE_IDS))})")
+
+    # Deduplicate — a deal could appear in multiple batches if stage changed mid-fetch
+    seen: dict[str, dict] = {}
+    for d in all_deals:
+        seen[d["id"]] = d
+
+    return list(seen.values())
 
 
 # ── Transform ─────────────────────────────────────────────────────────────────
@@ -130,25 +166,28 @@ def main():
     supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
     rows      = [to_row(d) for d in active_deals]
-    active_ids = [r["deal_id"] for r in rows]
+    active_ids = {r["deal_id"] for r in rows}
 
-    # Upsert in batches of 500
+    # Upsert all active deals (no empty-table window)
     batch_size = 500
     for i in range(0, len(rows), batch_size):
         supabase.table("deals_current").upsert(
             rows[i : i + batch_size], on_conflict="deal_id"
         ).execute()
-    print(f"  Upserted {len(rows)} active deal(s)")
+    print(f"  Upserted {len(rows)} deals")
 
-    # Delete stale rows not in the current active set
-    result  = supabase.table("deals_current").delete().not_.in_("deal_id", active_ids).execute()
-    deleted = len(result.data) if result.data else 0
-    print(f"  Deleted {deleted} stale deal(s)")
+    # Delete only the stale records (current in DB but not in this sync)
+    existing  = supabase.table("deals_current").select("deal_id").execute()
+    stale_ids = [r["deal_id"] for r in (existing.data or []) if r["deal_id"] not in active_ids]
+    if stale_ids:
+        for i in range(0, len(stale_ids), batch_size):
+            supabase.table("deals_current").delete().in_("deal_id", stale_ids[i : i + batch_size]).execute()
+    print(f"  Deleted {len(stale_ids)} stale deal(s)")
 
-    # Mark sync time — only reached if all upserts and deletes succeeded
+    # Set fetched_at only after everything succeeded
     now_iso = datetime.now(timezone.utc).isoformat()
     supabase.table("deals_current").update({"fetched_at": now_iso}).not_.is_("deal_id", None).execute()
-    print(f"  Sync timestamp set: {now_iso}")
+    print(f"  fetched_at: {now_iso}")
 
     print("Done.")
 
