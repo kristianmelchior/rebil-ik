@@ -36,7 +36,7 @@ async function getData(tlFilter?: string) {
   const [{ data, error }, reps, { data: syncData }] = await Promise.all([
     supabase.rpc('get_pipeline_with_rotten'),
     getAllRepsAdmin(),
-    supabase.from('deals_current').select('last_modified_at').order('last_modified_at', { ascending: false }).limit(1),
+    supabase.from('deals_current').select('fetched_at').order('fetched_at', { ascending: false }).limit(1),
   ])
   if (error) {
     const msg = (error as { message?: string }).message ?? JSON.stringify(error)
@@ -51,8 +51,8 @@ async function getData(tlFilter?: string) {
   let counts = (data ?? []) as PipelineCount[]
   if (tlFilter) counts = counts.filter(c => repTl.get(c.owner_name) === tlFilter)
 
-  const lastSyncedAt = syncData?.[0]?.last_modified_at
-    ? new Date(syncData[0].last_modified_at)
+  const lastSyncedAt = syncData?.[0]?.fetched_at
+    ? new Date(syncData[0].fetched_at)
     : null
 
   return { counts, lastSyncedAt }
