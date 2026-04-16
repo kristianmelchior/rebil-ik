@@ -50,29 +50,26 @@ MIN_EXPECTED_DEALS = 100
 
 def fetch_all_pipeline_deals(properties: list[str]) -> list[dict]:
     """
-    Fetch ALL deals in the pipeline using a pipeline EQ filter.
-    Deduplicates by deal_id (HubSpot can return duplicates across pages).
+    Fetch ALL non-archived deals using the list endpoint (no filter needed).
+    Filters to active pipeline stages client-side.
+    Uses GET /crm/v3/objects/deals — avoids 400 errors from unsupported
+    search filters (pipeline EQ and dealstage IN both fail on this account).
     """
-    url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals/search"
+    props_param = ",".join(properties)
+    url   = f"{HUBSPOT_BASE}/crm/v3/objects/deals"
     deals = []
     after = None
 
     while True:
-        payload: dict = {
-            "filterGroups": [{
-                "filters": [{
-                    "propertyName": "pipeline",
-                    "operator":     "EQ",
-                    "value":        PIPELINE_ID,
-                }]
-            }],
-            "properties": properties,
+        params: dict = {
+            "properties": props_param,
             "limit":      100,
+            "archived":   "false",
         }
         if after:
-            payload["after"] = after
+            params["after"] = after
 
-        r = httpx.post(url, headers=HEADERS, json=payload, timeout=30)
+        r = httpx.get(url, headers=HEADERS, params=params, timeout=30)
         if not r.is_success:
             print(f"  HubSpot error {r.status_code}: {r.text}", file=sys.stderr)
         r.raise_for_status()
@@ -83,11 +80,8 @@ def fetch_all_pipeline_deals(properties: list[str]) -> list[dict]:
         if not after:
             break
 
-    # Deduplicate by deal_id — keep last occurrence
-    seen: dict[str, dict] = {}
-    for d in deals:
-        seen[d["id"]] = d
-    return list(seen.values())
+    print(f"  {len(deals)} total non-archived deals fetched")
+    return deals
 
 
 # ── Transform ─────────────────────────────────────────────────────────────────
