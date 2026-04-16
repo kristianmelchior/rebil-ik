@@ -157,8 +157,34 @@ export default async function TlDashboardPage({
     ownerStageCount.set(owner, m)
   }
 
+  const syncAgeMinutes = lastSyncedAt
+    ? Math.floor((Date.now() - lastSyncedAt.getTime()) / 60_000)
+    : null
+
+  const syncTimeStr = lastSyncedAt
+    ? `${String(lastSyncedAt.getHours()).padStart(2, '0')}:${String(lastSyncedAt.getMinutes()).padStart(2, '0')}`
+    : null
+
   return (
     <div className="space-y-4">
+
+      {/* ── Sync staleness banner ─────────────────────────────────────────── */}
+      {syncAgeMinutes !== null && syncAgeMinutes > 30 && (
+        <div className={`flex items-center gap-3 rounded-card px-4 py-3 text-sm font-medium ${
+          syncAgeMinutes > 60
+            ? 'bg-[#FCEBEB] text-[#A32D2D] border border-[#F5C2C2]'
+            : 'bg-[#FEF3E2] text-[#C2580A] border border-[#F9D9A0]'
+        }`}>
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+            <circle cx="8" cy="8" r="6.5"/>
+            <path d="M8 5v3.5l2 2"/>
+          </svg>
+          {syncAgeMinutes > 60
+            ? `Synk stoppet — sist oppdatert ${syncTimeStr} (${syncAgeMinutes} min siden). Sjekk GitHub Actions.`
+            : `Data kan være utdatert — sist synket ${syncTimeStr} (${syncAgeMinutes} min siden).`
+          }
+        </div>
+      )}
 
       {/* ── Overview sections ─────────────────────────────────────────────── */}
       <PipelineOverview
