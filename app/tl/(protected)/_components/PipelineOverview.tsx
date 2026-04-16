@@ -47,13 +47,13 @@ function rottenBadgeClass(rottenCount: number, total: number): string {
 }
 
 interface Props {
-  total:      number
-  categories: CategoryData[]
-  reps:       RepDeepDive[]
-  updatedAt:  string
+  total:         number
+  categories:    CategoryData[]
+  reps:          RepDeepDive[]
+  lastSyncedAt:  Date | null
 }
 
-export default function PipelineOverview({ total, categories, reps, updatedAt }: Props) {
+export default function PipelineOverview({ total, categories, reps, lastSyncedAt }: Props) {
   const [tooltip,     setTooltip]     = useState<TooltipState | null>(null)
   const [expandedRep, setExpandedRep] = useState<string | null>(null)
   const [repDeals,    setRepDeals]    = useState<Record<string, RottenDeal[] | 'loading' | 'error'>>({})
@@ -137,7 +137,18 @@ export default function PipelineOverview({ total, categories, reps, updatedAt }:
         <div className="p-4 bg-[#EBF4FD]">
           <div className="flex items-baseline gap-2 mb-4">
             <span className="text-2xl font-medium text-[#185FA5]">{total} deals</span>
-            <span className="text-xs text-[#185FA5] opacity-75">i pipeline · oppdatert {updatedAt}</span>
+            {(() => {
+              if (!lastSyncedAt) return <span className="text-xs text-[#185FA5] opacity-75">i pipeline</span>
+              const ageMin = Math.floor((Date.now() - lastSyncedAt.getTime()) / 60_000)
+              const timeStr = `${String(lastSyncedAt.getHours()).padStart(2,'0')}:${String(lastSyncedAt.getMinutes()).padStart(2,'0')}`
+              const color = ageMin > 60 ? '#E24B4A' : ageMin > 30 ? '#C2580A' : undefined
+              return (
+                <span className="text-xs opacity-90" style={{ color: color ?? '#185FA5', opacity: color ? 1 : undefined }}>
+                  i pipeline · synket {timeStr}
+                  {ageMin > 30 && ` (${ageMin} min siden)`}
+                </span>
+              )
+            })()}
           </div>
           <div className="flex gap-3 overflow-x-auto pb-1">
             {categories.filter(c => c.count > 0).map(cat => {

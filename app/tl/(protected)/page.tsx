@@ -1,7 +1,11 @@
+import { cookies } from 'next/headers'
 import { createClient } from '@supabase/supabase-js'
 import { getAllRepsAdmin } from '@/lib/tl/admin-db'
 import { PIPELINE_CATEGORIES, ALL_STAGES } from '@/lib/tl/pipeline-config'
 import PipelineOverview, { type CategoryData, type RepDeepDive } from './_components/PipelineOverview'
+import { getRepByKode } from '@/lib/db'
+import { SESSION_COOKIE_NAME } from '@/lib/auth'
+import { isTlSuperadmin } from '@/lib/tl/superadmin'
 
 interface PipelineCount {
   owner_name:   string
@@ -29,9 +33,10 @@ function getAdminClient() {
 
 async function getData(tlFilter?: string) {
   const supabase = getAdminClient()
-  const [{ data, error }, reps] = await Promise.all([
+  const [{ data, error }, reps, { data: syncData }] = await Promise.all([
     supabase.rpc('get_pipeline_with_rotten'),
     getAllRepsAdmin(),
+    supabase.from('deals_current').select('last_modified_at').order('last_modified_at', { ascending: false }).limit(1),
   ])
   if (error) {
     const msg = (error as { message?: string }).message ?? JSON.stringify(error)
@@ -46,11 +51,11 @@ async function getData(tlFilter?: string) {
   let counts = (data ?? []) as PipelineCount[]
   if (tlFilter) counts = counts.filter(c => repTl.get(c.owner_name) === tlFilter)
 
-  return { counts }
-}
+  const lastSyncedAt = syncData?.[0]?.last_modified_at
+    ? new Date(syncData[0].last_modified_at)
+    : null
 
-function formatTime(d: Date) {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return { counts, lastSyncedAt }
 }
 
 // Stage id → name lookup
@@ -66,7 +71,21 @@ export default async function TlDashboardPage({
   searchParams: Promise<{ tl?: string }>
 }) {
   const { tl } = await searchParams
-  const { counts } = await getData(tl)
+
+  // Non-admin teamleders default to filtering by their own name
+  let effectiveTl = tl
+  if (!effectiveTl) {
+    const cookieStore = await cookies()
+    const session = cookieStore.get(SESSION_COOKIE_NAME)?.value ?? ''
+    if (!session.startsWith('__tl_super__')) {
+      const rep = await getRepByKode(session)
+      if (rep && !isTlSuperadmin(rep.email)) {
+        effectiveTl = rep.full_name ?? undefined
+      }
+    }
+  }
+
+  const { counts, lastSyncedAt } = await getData(effectiveTl)
 
   // ── Build maps ─────────────────────────────────────────────────────────────
 
@@ -146,7 +165,7 @@ export default async function TlDashboardPage({
         total={total}
         categories={categoryTotals}
         reps={repRows}
-        updatedAt={formatTime(new Date())}
+        lastSyncedAt={lastSyncedAt}
       />
 
       {/* ── Pipeline table ────────────────────────────────────────────────── */}
