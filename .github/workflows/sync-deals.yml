@@ -1,18 +1,7 @@
 name: Sync HubSpot deals
 
 on:
-  schedule:
-    # Mon–Fri work hours (8:45–17:15 local): every 15 min
-    # UTC range 6:45–16:15 covers both CET (UTC+1) and CEST (UTC+2)
-    - cron: '45 6 * * 1-5'
-    - cron: '0,15,30,45 7-15 * * 1-5'
-    - cron: '0,15 16 * * 1-5'
-    # Mon–Fri off-hours: every hour
-    - cron: '0 0-6 * * 1-5'
-    - cron: '0 17-23 * * 1-5'
-    # Weekends: every hour
-    - cron: '0 * * * 0,6'
-  workflow_dispatch:           # manual trigger from GitHub UI
+  workflow_dispatch:           # triggered by cron-job.org every 15 min
 
 jobs:
   sync:
