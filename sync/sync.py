@@ -177,8 +177,17 @@ def main():
     print(f"  Upserted {len(rows)} deals")
 
     # Delete only the stale records (current in DB but not in this sync)
-    existing  = supabase.table("deals_current").select("deal_id").execute()
-    stale_ids = [r["deal_id"] for r in (existing.data or []) if r["deal_id"] not in active_ids]
+    # Paginate to avoid 1000-row default limit
+    all_existing: list[dict] = []
+    chunk = 1000
+    offset = 0
+    while True:
+        page = supabase.table("deals_current").select("deal_id").range(offset, offset + chunk - 1).execute()
+        all_existing.extend(page.data or [])
+        if len(page.data or []) < chunk:
+            break
+        offset += chunk
+    stale_ids = [r["deal_id"] for r in all_existing if r["deal_id"] not in active_ids]
     if stale_ids:
         for i in range(0, len(stale_ids), batch_size):
             supabase.table("deals_current").delete().in_("deal_id", stale_ids[i : i + batch_size]).execute()
