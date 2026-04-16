@@ -129,6 +129,13 @@ def main():
     all_deals = fetch_recently_modified_deals(BASE_PROPERTIES)
     print(f"  {len(all_deals)} deals modified in window")
 
+    # Deduplicate by deal_id — HubSpot can return the same deal on multiple pages
+    # when deals are modified mid-search. Keep the last (most recent) occurrence.
+    seen: dict[str, dict] = {}
+    for d in all_deals:
+        seen[d["id"]] = d
+    all_deals = list(seen.values())
+
     active_deals = [d for d in all_deals if d.get("properties", {}).get("dealstage") in ACTIVE_STAGE_IDS]
     inactive_ids = [d["id"] for d in all_deals if d.get("properties", {}).get("dealstage") not in ACTIVE_STAGE_IDS]
 
