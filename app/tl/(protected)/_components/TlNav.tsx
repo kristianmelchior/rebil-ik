@@ -29,7 +29,8 @@ export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
   ]
 
   return (
-    <header className="bg-white border-b border-border px-6 h-14 flex items-center justify-between">
+    <header className="bg-white border-b border-border">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
       <div className="flex items-center gap-5">
         <span className="font-semibold text-text-primary">Rebil TL</span>
         <nav className="flex items-center gap-1">
@@ -73,6 +74,7 @@ export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
         >
           ← IK-dash
         </Link>
+      </div>
       </div>
     </header>
   )
