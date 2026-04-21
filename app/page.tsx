@@ -403,12 +403,17 @@ export default function Page() {
             salesThisMonth={data.salesThisMonth}
             salesLast30Days={data.salesLast30Days}
             leads={metrics.leads}
+            currentMonthKonvPlattform={data.currentMonthKonvPlattform}
+            last30KonvPlattform={data.last30KonvPlattform}
+            currentMonthSameDagPct={data.currentMonthSameDagPct}
           />
           <TrendCharts
             trend={data.trend}
             medianTrend={data.medianTrend}
             prisDistTrend={data.prisDistTrend}
             fordDistTrend={data.fordDistTrend}
+            konvPlattformTrend={data.konvPlattformTrend}
+            kontakttidTrend={data.kontakttidTrend}
             currentMonthMetrics={data.currentMonth}
             last30Metrics={data.last30Days}
             repKode={data.rep.kode}

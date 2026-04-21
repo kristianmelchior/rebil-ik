@@ -110,6 +110,47 @@ export interface FordDistPoint {
   salgshjelp: number
 }
 
+export interface KonvPlattformAgg {
+  kode: string
+  teamleder: string
+  month: string        // 'YYYY-MM' based on dato_lagt_i_plattform
+  plattform_count: number
+}
+
+export interface KontakttidAgg {
+  kode: string
+  teamleder: string
+  month: string
+  kontakttid_kategori: string
+  lead_count: number
+}
+
+export interface KontakttidAvgAgg {
+  kode: string
+  teamleder: string
+  month: string
+  avg_days: number
+}
+
+export interface KontakttidPoint {
+  month: string
+  total: number
+  shares: Record<string, number>  // category → share (0–1)
+  avgDays: number | null
+}
+
+export interface KonvPlattformRangeAgg {
+  kode: string
+  teamleder: string
+  plattform_count: number
+}
+
+export interface KonvPlattformPoint {
+  month: string
+  rate: number | null  // plattform_count / total_leads (0–1), null if no leads
+  count: number        // absolute plattform_count for this month
+}
+
 // Full dashboard payload — returned by GET /api/data
 export interface RepDashboard {
   rep: Rep
@@ -127,6 +168,11 @@ export interface RepDashboard {
   salesByMonth: Record<string, SaleRow[]>             // key = 'YYYY-MM'
   prisDistTrend: PrisDistPoint[]
   fordDistTrend: FordDistPoint[]
+  konvPlattformTrend: KonvPlattformPoint[]
+  kontakttidTrend: KontakttidPoint[]
+  currentMonthSameDagPct: number | null   // share of first alphabetical kontakttid category
+  currentMonthKonvPlattform: { rate: number | null; count: number }
+  last30KonvPlattform:       { rate: number | null; count: number }
   lastUpdated: string
   admin?: AdminDashboardMeta
   teamView?: TeamlederDashboardMeta

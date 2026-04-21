@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg } from './types'
+import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -239,6 +239,52 @@ function buildMedianTrend(
   })
 }
 
+// Build per-rep platform conversion trend for all 12 months of the year.
+// rate = plattform_count / total_leads (by createdate). count = absolute plattform_count.
+// No team median — user requested none for this metric.
+function buildKonvPlattformTrend(
+  repKode: string,
+  konvPlattformAgg: KonvPlattformAgg[],
+  leadMonthly: LeadMonthlyAgg[],
+  year: number
+): KonvPlattformPoint[] {
+  const repPlatform = konvPlattformAgg.filter(r => r.kode === repKode)
+  const repLeads    = leadMonthly.filter(r => r.kode === repKode)
+
+  return buildYearMonthKeys(year).map(ym => {
+    const platformRow = repPlatform.find(r => r.month === ym)
+    const count       = platformRow ? Number(platformRow.plattform_count) : 0
+    const totalLeads  = repLeads
+      .filter(r => r.month === ym)
+      .reduce((s, r) => s + Number(r.teller_true) + Number(r.teller_false), 0)
+    const rate = totalLeads > 0 ? count / totalLeads : null
+    return { month: ym, rate, count }
+  })
+}
+
+// Build per-rep kontakttid distribution trend for all 12 months.
+// Categories are sorted alphabetically — "Samme dag" sorts near the end, landing at chart bottom (red).
+function buildKontakttidTrend(
+  repKode: string,
+  kontakttidAgg: KontakttidAgg[],
+  kontakttidAvgAgg: KontakttidAvgAgg[],
+  year: number
+): KontakttidPoint[] {
+  const repData    = kontakttidAgg.filter(r => r.kode === repKode)
+  const repAvgData = kontakttidAvgAgg.filter(r => r.kode === repKode)
+  return buildYearMonthKeys(year).map(ym => {
+    const monthRows = repData.filter(r => r.month === ym)
+    const total = monthRows.reduce((s, r) => s + Number(r.lead_count), 0)
+    const shares: Record<string, number> = {}
+    for (const row of monthRows) {
+      shares[row.kontakttid_kategori] = total > 0 ? Number(row.lead_count) / total : 0
+    }
+    const avgRow = repAvgData.find(r => r.month === ym)
+    const avgDays = avgRow != null ? Number(avgRow.avg_days) : null
+    return { month: ym, total, shares, avgDays }
+  })
+}
+
 // Build per-rep monthly pris-distribution trend (shares 0–1) for all 12 months.
 function buildPrisDistTrend(saleRows: SaleRow[], year: number): PrisDistPoint[] {
   return buildYearMonthKeys(year).map(ym => {
@@ -290,7 +336,11 @@ export function buildDashboard(
   allSales: SaleRow[],
   leadMonthly: LeadMonthlyAgg[],
   leadRange30: LeadRangeAgg[],
-  allNps: NpsRow[]
+  allNps: NpsRow[],
+  konvPlattformMonthly: KonvPlattformAgg[],
+  konvPlattformRange30: KonvPlattformRangeAgg[],
+  kontakttidMonthly: KontakttidAgg[],
+  kontakttidAvgMonthly: KontakttidAvgAgg[]
 ): RepDashboard {
   const today = new Date()
   const year  = today.getFullYear()
@@ -352,6 +402,24 @@ export function buildDashboard(
     medianPrisPct30:     computeMedianPrisPct(allSales, last30Start, todayStr),
     prisDistTrend:       buildPrisDistTrend(repSales, year),
     fordDistTrend:       buildFordDistTrend(repSales, year),
+    konvPlattformTrend:  buildKonvPlattformTrend(rep.kode, konvPlattformMonthly, leadMonthly, year),
+    ...(() => {
+      const kontakttidTrend = buildKontakttidTrend(rep.kode, kontakttidMonthly, kontakttidAvgMonthly, year)
+      const currentPt  = kontakttidTrend.find(p => p.month === currentMonthKey)
+      const firstCat   = Object.keys(currentPt?.shares ?? {}).sort()[0]
+      const currentMonthSameDagPct = firstCat != null ? (currentPt?.shares[firstCat] ?? null) : null
+      return { kontakttidTrend, currentMonthSameDagPct }
+    })(),
+    currentMonthKonvPlattform: (() => {
+      const repPlatformMonth = konvPlattformMonthly.filter(r => r.kode === rep.kode && r.month === currentMonthKey)
+      const count = repPlatformMonth.reduce((s, r) => s + Number(r.plattform_count), 0)
+      return { rate: repMonthLeadTotal > 0 ? count / repMonthLeadTotal : null, count }
+    })(),
+    last30KonvPlattform: (() => {
+      const repRow = konvPlattformRange30.find(r => r.kode === rep.kode)
+      const count = repRow ? Number(repRow.plattform_count) : 0
+      return { rate: repLast30LeadTotal > 0 ? count / repLast30LeadTotal : null, count }
+    })(),
     lastUpdated:         new Date().toISOString(),
   }
 }

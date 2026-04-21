@@ -7,6 +7,10 @@ import {
   getLeadsMonthly,
   getLeadsRange,
   getAllNps,
+  getKonvPlattformMonthly,
+  getKonvPlattformRange,
+  getKontakttidMonthly,
+  getKontakttidAvgMonthly,
   getAllRepsForPicker,
   getTeamMembers,
 } from '@/lib/db'
@@ -72,7 +76,15 @@ export async function GET() {
       getAllNps(year),
     ])
 
-    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps)
+    // Graceful fallback — returns empty arrays until SQL functions are deployed
+    const [konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly] = await Promise.all([
+      getKonvPlattformMonthly(year).catch(() => []),
+      getKonvPlattformRange(last30Start, todayStr).catch(() => []),
+      getKontakttidMonthly(year).catch(() => []),
+      getKontakttidAvgMonthly(year).catch(() => []),
+    ])
+
+    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly)
 
     if (isAdmin) {
       const reps = await getAllRepsForPicker()

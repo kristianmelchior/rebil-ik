@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
-import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg } from './types'
+import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg } from './types'
 
 // Cache TTLs (seconds)
 const TTL_SALES_DATA = 300  // 5 min — sales/leads/NPS shared across all users
@@ -223,6 +223,53 @@ export const getLeadsRange = unstable_cache(
     return (data ?? []) as LeadRangeAgg[]
   },
   ['leads-range'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Plattform conversion counts per rep per month — groups by dato_lagt_i_plattform.
+// Input: year (number)  Output: KonvPlattformAgg[]
+export const getKonvPlattformMonthly = unstable_cache(
+  async (year: number): Promise<KonvPlattformAgg[]> => {
+    const { data, error } = await supabase.rpc('get_konv_plattform_monthly', { p_year: year })
+    if (error) throw error
+    return (data ?? []) as KonvPlattformAgg[]
+  },
+  ['konv-plattform-monthly'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Plattform conversion counts per rep for an arbitrary date range.
+// Input: from/to (YYYY-MM-DD strings)  Output: KonvPlattformRangeAgg[]
+export const getKonvPlattformRange = unstable_cache(
+  async (from: string, to: string): Promise<KonvPlattformRangeAgg[]> => {
+    const { data, error } = await supabase.rpc('get_konv_plattform_range', { p_from: from, p_to: to })
+    if (error) throw error
+    return (data ?? []) as KonvPlattformRangeAgg[]
+  },
+  ['konv-plattform-range'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Kontakttid counts per rep/month/kategori based on dato_kontaktet_kunde_main_eller_avslag.
+// Input: year (number)  Output: KontakttidAgg[]
+export const getKontakttidMonthly = unstable_cache(
+  async (year: number): Promise<KontakttidAgg[]> => {
+    const { data, error } = await supabase.rpc('get_kontakttid_monthly', { p_year: year })
+    if (error) throw error
+    return (data ?? []) as KontakttidAgg[]
+  },
+  ['kontakttid-monthly'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Average kontakttid (days) per rep per month based on dato_kontaktet_kunde_main_eller_avslag.
+export const getKontakttidAvgMonthly = unstable_cache(
+  async (year: number): Promise<KontakttidAvgAgg[]> => {
+    const { data, error } = await supabase.rpc('get_kontakttid_avg_monthly', { p_year: year })
+    if (error) throw error
+    return (data ?? []) as KontakttidAvgAgg[]
+  },
+  ['kontakttid-avg-monthly'],
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 

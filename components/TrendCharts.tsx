@@ -10,7 +10,7 @@ import {
   CartesianGrid, ResponsiveContainer, Tooltip,
   LabelList,
 } from 'recharts'
-import type { PeriodMetrics, PrisDistPoint, FordDistPoint } from '@/lib/types'
+import type { PeriodMetrics, PrisDistPoint, FordDistPoint, KonvPlattformPoint, KontakttidPoint } from '@/lib/types'
 import type { TrendMetric } from '@/lib/formatDisplay'
 import { fmtTrendMetric } from '@/lib/formatDisplay'
 import { workdaysInMonth, elapsedWorkdaysInMonth } from '@/lib/workdays'
@@ -18,7 +18,7 @@ import { workdaysInMonth, elapsedWorkdaysInMonth } from '@/lib/workdays'
 const BRAND_RED = 'var(--rebil-red)'
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des']
 
-type ExtMetric = TrendMetric | 'prisDist' | 'fordDist' | 'leadstildeling'
+type ExtMetric = TrendMetric | 'prisDist' | 'fordDist' | 'leadstildeling' | 'konvPlattform' | 'kontakttid'
 
 // ─── Row 1 options (mirrors KpiTiles row) ────────────────────────────────────
 const ROW1: { label: string; value: ExtMetric }[] = [
@@ -32,8 +32,8 @@ const ROW1: { label: string; value: ExtMetric }[] = [
 const ROW2: { label: string; value: ExtMetric; disabled?: boolean }[] = [
   { label: 'Leads',        value: 'leads'             },
   { label: 'Fastpris',     value: 'fordDist'          },
-  { label: 'Konv plt.',    value: 'konverteringsrate', disabled: true },
-  { label: 'Kontakttid',   value: 'npsScore',          disabled: true },
+  { label: 'Konv plt.',    value: 'konvPlattform'                    },
+  { label: 'Kontakttid',   value: 'kontakttid'                        },
 ]
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
@@ -92,6 +92,30 @@ function LeadsTooltip({
       <p className="text-text-secondary">Teller: {!Number.isNaN(trueVal) ? trueVal : '—'}</p>
       <p className="text-text-secondary">Helgevakt, teller ikke: {!Number.isNaN(falseVal) ? falseVal : '—'}</p>
       <p className="text-text-secondary">Median totalt: {!Number.isNaN(medVal) ? Math.round(medVal) : '—'}</p>
+    </div>
+  )
+}
+
+// ─── Tooltip for konv plattform chart ────────────────────────────────────────
+function KonvPlattformTooltip({
+  active, payload, label,
+}: {
+  active?: boolean
+  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown }>
+  label?: unknown
+}) {
+  if (!active || !payload?.length || label == null) return null
+  const ym = String(label)
+  const monthName = MONTH_ABBR[parseInt(ym.slice(5, 7), 10) - 1]
+  const rateRaw  = payload.find(p => p.dataKey === 'rate')?.value
+  const countRaw = payload.find(p => p.dataKey === 'count')?.value
+  const rate  = typeof rateRaw  === 'number' ? rateRaw  : NaN
+  const count = typeof countRaw === 'number' ? countRaw : NaN
+  return (
+    <div className="bg-surface border border-border rounded-lg px-3 py-2 text-xs shadow-sm">
+      <p className="font-medium text-text-primary mb-1">{monthName}</p>
+      <p className="text-text-secondary">Konv. plattform: {!Number.isNaN(rate) ? `${Math.round(rate)}%` : '—'}</p>
+      <p className="text-text-secondary">Til plattform: {!Number.isNaN(count) ? count : '—'}</p>
     </div>
   )
 }
@@ -166,6 +190,8 @@ interface TrendChartsProps {
   medianTrend?:          (PeriodMetrics & { month: string })[]
   prisDistTrend?:        PrisDistPoint[]
   fordDistTrend?:        FordDistPoint[]
+  konvPlattformTrend?:   KonvPlattformPoint[]
+  kontakttidTrend?:      KontakttidPoint[]
   currentMonthMetrics?:  PeriodMetrics
   last30Metrics?:        PeriodMetrics
   repKode?:              string
@@ -173,6 +199,7 @@ interface TrendChartsProps {
 
 export default function TrendCharts({
   trend = [], medianTrend = [], prisDistTrend = [], fordDistTrend = [],
+  konvPlattformTrend = [], kontakttidTrend = [],
   currentMonthMetrics, last30Metrics, repKode,
 }: TrendChartsProps) {
   const [metric, setMetric] = useState<ExtMetric>('npsScore')
@@ -218,8 +245,44 @@ export default function TrendCharts({
     }
   })
 
+  // ── Konv plattform chart data ──
+  const konvPlattformData = metric !== 'konvPlattform' ? [] : konvPlattformTrend.map(point => {
+    const isFuture = point.month > currentMonthKey
+    return {
+      month: point.month,
+      rate:  isFuture || point.rate === null ? null : +(point.rate * 100).toFixed(1),
+      count: isFuture ? null : point.count,
+    }
+  })
+
+  // ── Kontakttid chart data ──
+  // Categories sorted alphabetically — "Samme dag" (S) naturally lands last → bottom of stack → red.
+  const kontakttidCategories = metric !== 'kontakttid' ? [] :
+    [...new Set(kontakttidTrend.flatMap(pt => Object.keys(pt.shares)))].sort()
+
+  const kontakttidData = metric !== 'kontakttid' ? [] : kontakttidTrend.map(pt => {
+    const isFuture = pt.month > currentMonthKey
+    const row: Record<string, string | number | null> = { month: pt.month }
+    if (!isFuture) {
+      for (const cat of kontakttidCategories) {
+        row[cat] = +((pt.shares[cat] ?? 0) * 100).toFixed(1)
+      }
+      row['avgDays'] = pt.avgDays
+    } else {
+      for (const cat of kontakttidCategories) row[cat] = null
+      row['avgDays'] = null
+    }
+    return row
+  })
+
+  function kontakttidColor(idx: number): string {
+    if (idx === 0) return BRAND_RED  // first in JSX = bottom of stack = "Samme dag"
+    const greys = ['#555', '#777', '#999', '#aaa']
+    return greys[Math.min(idx - 1, greys.length - 1)]
+  }
+
   // ── Standard chart data (only computed for non-leads, non-dist, non-leadstildeling metrics) ──
-  const standardData = (isDistMetric || metric === 'leads' || metric === 'leadstildeling') ? [] : trend.map((point, i) => {
+  const standardData = (isDistMetric || metric === 'leads' || metric === 'leadstildeling' || metric === 'konvPlattform' || metric === 'kontakttid') ? [] : trend.map((point, i) => {
     const isFuture = point.month > currentMonthKey
     const m = metric as TrendMetric
     return {
@@ -504,6 +567,94 @@ export default function TrendCharts({
               <Bar dataKey="salgshjelp" stackId="a" fill={FORD_COLORS.salgshjelp}  stroke={STROKE_COLOR} strokeWidth={0.5} radius={[3, 3, 0, 0]} />
             </ComposedChart>
 
+          /* ── Konv plattform: rate bar + count line ── */
+          ) : metric === 'konvPlattform' ? (
+            <ComposedChart data={konvPlattformData} margin={{ top: 28, right: 48, bottom: 0, left: 4 }}>
+              <CartesianGrid vertical={false} stroke="#F0F0F0" />
+              <XAxis {...xAxisProps} />
+              <YAxis yAxisId="rate" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888888' }} width={40} tickFormatter={v => `${Math.round(v)}%`} domain={[0, 100]} />
+              <YAxis yAxisId="count" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888888' }} width={40} />
+              <Tooltip
+                content={({ active, payload, label }) => (
+                  <KonvPlattformTooltip active={active} payload={payload} label={label} />
+                )}
+              />
+              <Bar yAxisId="rate" dataKey="rate" fill={BRAND_RED} radius={[3, 3, 0, 0]}>
+                <LabelList
+                  position="top"
+                  fill="#111111"
+                  fontSize={11}
+                  formatter={(v: unknown) => typeof v === 'number' ? `${Math.round(v)}%` : ''}
+                />
+              </Bar>
+              <Line yAxisId="count" dataKey="count" stroke="#111111" strokeWidth={1.5} dot={false}>
+                <LabelList
+                  position="top"
+                  fill="#111111"
+                  fontSize={11}
+                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? String(v) : ''}
+                />
+              </Line>
+            </ComposedChart>
+
+          /* ── Kontakttid: 100% stacked by category + plattform count line ── */
+          ) : metric === 'kontakttid' ? (
+            <ComposedChart data={kontakttidData} margin={{ top: 8, right: 48, bottom: 0, left: 4 }}>
+              <CartesianGrid vertical={false} stroke="#F0F0F0" />
+              <XAxis {...xAxisProps} />
+              <YAxis yAxisId="dist" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888888' }} width={40} tickFormatter={v => `${Math.round(v)}%`} domain={[0, 100]} />
+              <YAxis yAxisId="count" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#888888' }} width={40} />
+              <Tooltip
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length || label == null) return null
+                  const ym = String(label)
+                  const monthName = MONTH_ABBR[parseInt(ym.slice(5, 7), 10) - 1]
+                  const countEntry = payload.find(p => p.dataKey === 'avgDays')
+                  return (
+                    <div className="bg-surface border border-border rounded-lg px-3 py-2 text-xs shadow-sm">
+                      <p className="font-medium text-text-primary mb-1">{monthName}</p>
+                      {[...kontakttidCategories].reverse().map(cat => {
+                        const entry = payload.find(p => p.dataKey === cat)
+                        const v = typeof entry?.value === 'number' ? entry.value : 0
+                        return (
+                          <div key={cat} className="flex items-center gap-1.5">
+                            <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry?.fill as string }} />
+                            <span className="text-text-secondary">{cat}: {Math.round(v)}%</span>
+                          </div>
+                        )
+                      })}
+                      {countEntry && typeof countEntry.value === 'number' && (
+                        <p className="text-text-secondary mt-1">Snitt kontakttid: {countEntry.value} dager</p>
+                      )}
+                    </div>
+                  )
+                }}
+              />
+              {kontakttidCategories.map((cat, idx) => (
+                <Bar key={cat} yAxisId="dist" dataKey={cat} stackId="kt" fill={kontakttidColor(idx)} stroke={STROKE_COLOR} strokeWidth={0.5}
+                  radius={idx === kontakttidCategories.length - 1 ? [3, 3, 0, 0] : undefined}>
+                  {idx === 0 && (
+                    <LabelList
+                      dataKey={cat}
+                      position="center"
+                      fill="#fff"
+                      fontSize={11}
+                      fontWeight={600}
+                      formatter={(v: unknown) => typeof v === 'number' && v > 0 ? `${Math.round(v)}%` : ''}
+                    />
+                  )}
+                </Bar>
+              ))}
+              <Line yAxisId="count" dataKey="avgDays" stroke="#111111" strokeWidth={1.5} dot={false}>
+                <LabelList
+                  position="top"
+                  fill="#111111"
+                  fontSize={11}
+                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? `${v}d` : ''}
+                />
+              </Line>
+            </ComposedChart>
+
           /* ── Standard bar + median line ── */
           ) : (
             <ComposedChart data={standardData} margin={{ top: 28, right: 8, bottom: 0, left: 4 }}>
@@ -533,7 +684,20 @@ export default function TrendCharts({
         </ResponsiveContainer>
 
         {/* Legend */}
-        {isDistMetric ? (
+        {metric === 'kontakttid' ? (
+          <div className="flex justify-end flex-wrap gap-4 mt-3">
+            {kontakttidCategories.map((cat, i) => (
+              <div key={cat} className="flex items-center gap-1.5">
+                <span className="inline-block w-3 h-3 rounded-sm border border-[#111]" style={{ backgroundColor: kontakttidColor(i) }} />
+                <span className="text-xs text-text-secondary">{cat}</span>
+              </div>
+            ))}
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-0.5 bg-text-primary" />
+              <span className="text-xs text-text-secondary">Snitt kontakttid</span>
+            </div>
+          </div>
+        ) : isDistMetric ? (
           <div className="flex justify-end gap-5 mt-3">
             {metric === 'prisDist' ? (
               <>
@@ -549,6 +713,17 @@ export default function TrendCharts({
                 <div className="flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded-sm border border-[#111]" style={{ backgroundColor: FORD_COLORS.salgshjelp }} /><span className="text-xs text-text-secondary">Salgshjelp</span></div>
               </>
             )}
+          </div>
+        ) : metric === 'konvPlattform' ? (
+          <div className="flex justify-end gap-5 mt-3">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: BRAND_RED }} />
+              <span className="text-xs text-text-secondary">Konv. til plattform</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-0.5 bg-text-primary" />
+              <span className="text-xs text-text-secondary">Antall til plattform</span>
+            </div>
           </div>
         ) : metric === 'leads' ? (
           <div className="flex justify-end gap-5 mt-3">
