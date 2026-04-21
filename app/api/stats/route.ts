@@ -84,7 +84,7 @@ function buildMetrics(
   // Pre-build lead count map for O(1) lookups (RPC returns one row per kode)
   const leadCountMap = new Map<string, number>()
   for (const l of leadsAgg) {
-    leadCountMap.set(l.kode, (leadCountMap.get(l.kode) ?? 0) + Number(l.lead_count))
+    leadCountMap.set(l.kode, (leadCountMap.get(l.kode) ?? 0) + Number(l.teller_true))
   }
 
   return reps.map(rep => {

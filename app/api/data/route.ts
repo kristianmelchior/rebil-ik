@@ -78,7 +78,7 @@ export async function GET() {
       const reps = await getAllRepsForPicker()
       return Response.json(
         { ...dashboard, admin: { reps } },
-        { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } }
+        { headers: { 'Cache-Control': 'no-store' } }
       )
     }
 

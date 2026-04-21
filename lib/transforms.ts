@@ -29,14 +29,16 @@ function filterByDateRange<T>(rows: T[], dateField: keyof T, from: string, to: s
 
 // Compute PeriodMetrics from a set of rows already filtered to one rep and period.
 // bilerKjopt = SUM(biler) not COUNT(*). konverteringsrate null if leads === 0.
-// Input: saleRows, leadCount (pre-aggregated), npsRows  Output: PeriodMetrics
+// leadCount = teller_lead=true only; leadTotalCount = true + false.
 function computeMetrics(
   saleRows: SaleRow[],
   leadCount: number,
+  leadTotalCount: number,
   npsRows: NpsRow[]
 ): PeriodMetrics {
   const bilerKjopt = saleRows.reduce((sum, r) => sum + r.biler, 0)
   const leads = leadCount
+  const leadsTotal = leadTotalCount
   const konverteringsrate = leads === 0 ? null : (bilerKjopt / leads) * 100
 
   const npsValues = npsRows.map(r => r.nps_adj_score)
@@ -44,7 +46,7 @@ function computeMetrics(
     ? null
     : npsValues.reduce((sum, v) => sum + v, 0) / npsValues.length
 
-  return { bilerKjopt, leads, konverteringsrate, npsScore, npsCount: npsValues.length }
+  return { bilerKjopt, leads, leadsTotal, konverteringsrate, npsScore, npsCount: npsValues.length }
 }
 
 // Compute the statistical median of a numeric array.
@@ -97,32 +99,53 @@ function computeMedianPrisPct(allSaleRows: SaleRow[], from: string, to: string):
   return percentile(pcts, 80)
 }
 
-// Build a kode → leadCount map from monthly agg for a specific 'YYYY-MM' key.
+// Build a kode → teller_true map from monthly agg for a specific 'YYYY-MM' key.
 function buildLeadMapForMonth(leadMonthly: LeadMonthlyAgg[], monthKey: string): Map<string, number> {
   const map = new Map<string, number>()
   for (const r of leadMonthly) {
     if (r.month === monthKey) {
-      map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.lead_count))
+      map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.teller_true))
     }
   }
   return map
 }
 
-// Build a kode → leadCount map from range agg.
+// Build a kode → total leads (true + false) map from monthly agg for a specific 'YYYY-MM' key.
+function buildLeadTotalMapForMonth(leadMonthly: LeadMonthlyAgg[], monthKey: string): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const r of leadMonthly) {
+    if (r.month === monthKey) {
+      map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.teller_true) + Number(r.teller_false))
+    }
+  }
+  return map
+}
+
+// Build a kode → teller_true map from range agg.
 function buildLeadMapFromRange(leadRange: LeadRangeAgg[]): Map<string, number> {
   const map = new Map<string, number>()
   for (const r of leadRange) {
-    map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.lead_count))
+    map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.teller_true))
+  }
+  return map
+}
+
+// Build a kode → total leads (true + false) map from range agg.
+function buildLeadTotalMapFromRange(leadRange: LeadRangeAgg[]): Map<string, number> {
+  const map = new Map<string, number>()
+  for (const r of leadRange) {
+    map.set(r.kode, (map.get(r.kode) ?? 0) + Number(r.teller_true) + Number(r.teller_false))
   }
   return map
 }
 
 // Compute team-wide PeriodMetrics median for a date range.
-// Collects all unique rep kodes from sales, nps, and the lead map.
-// Input: all year rows for all reps, leadsByKode map, from/to date strings  Output: PeriodMetrics
+// Collects all unique rep kodes from sales, nps, and the lead maps.
+// leadsByKode = teller_true; leadTotalsByKode = true + false.
 function computeTeamMedian(
   allSaleRows: SaleRow[],
   leadsByKode: Map<string, number>,
+  leadTotalsByKode: Map<string, number>,
   allNpsRows: NpsRow[],
   from: string,
   to: string
@@ -144,18 +167,20 @@ function computeTeamMedian(
 
   const kodes = Array.from(kodeSet)
   if (kodes.length === 0) {
-    return { bilerKjopt: 0, leads: 0, konverteringsrate: null, npsScore: null, npsCount: 0 }
+    return { bilerKjopt: 0, leads: 0, leadsTotal: 0, konverteringsrate: null, npsScore: null, npsCount: 0 }
   }
 
   const perRep = kodes.map(kode => computeMetrics(
     filterByKode(salesInRange, kode),
     leadsByKode.get(kode) ?? 0,
+    leadTotalsByKode.get(kode) ?? 0,
     filterByKode(npsInRange,   kode),
   ))
 
   return {
     bilerKjopt:        median(perRep.map(m => m.bilerKjopt)) ?? 0,
     leads:             median(perRep.map(m => m.leads)) ?? 0,
+    leadsTotal:        median(perRep.map(m => m.leadsTotal)) ?? 0,
     konverteringsrate: median(perRep.map(m => m.konverteringsrate).filter((v): v is number => v !== null)),
     npsScore:          median(perRep.map(m => m.npsScore).filter((v): v is number => v !== null)),
     npsCount:          0,
@@ -181,14 +206,15 @@ function buildTrend(
   year: number
 ): (PeriodMetrics & { month: string })[] {
   return buildYearMonthKeys(year).map(ym => {
-    const leadCount = repLeadMonthly
-      .filter(r => r.month === ym)
-      .reduce((s, r) => s + Number(r.lead_count), 0)
+    const monthRows = repLeadMonthly.filter(r => r.month === ym)
+    const leadCount      = monthRows.reduce((s, r) => s + Number(r.teller_true), 0)
+    const leadTotalCount = monthRows.reduce((s, r) => s + Number(r.teller_true) + Number(r.teller_false), 0)
     return {
       month: ym,
       ...computeMetrics(
         filterByDateRange(saleRows, 'dato_kjopt', `${ym}-01`, `${ym}-31`),
         leadCount,
+        leadTotalCount,
         filterByDateRange(npsRows,  'month',      `${ym}-01`, `${ym}-31`),
       ),
     }
@@ -204,10 +230,11 @@ function buildMedianTrend(
   year: number
 ): (PeriodMetrics & { month: string })[] {
   return buildYearMonthKeys(year).map(ym => {
-    const leadMap = buildLeadMapForMonth(allLeadMonthly, ym)
+    const leadMap      = buildLeadMapForMonth(allLeadMonthly, ym)
+    const leadTotalMap = buildLeadTotalMapForMonth(allLeadMonthly, ym)
     return {
       month: ym,
-      ...computeTeamMedian(allSaleRows, leadMap, allNpsRows, `${ym}-01`, `${ym}-31`),
+      ...computeTeamMedian(allSaleRows, leadMap, leadTotalMap, allNpsRows, `${ym}-01`, `${ym}-31`),
     }
   })
 }
@@ -282,22 +309,24 @@ export function buildDashboard(
   const repLeadMonthly = leadMonthly.filter(r => r.kode === rep.kode)
 
   // Current-month slices
-  const repSalesMonth     = filterByDateRange(repSales, 'dato_kjopt',   currentMonthStart, todayStr)
-  const repNpsMonth       = filterByDateRange(repNps,   'submitted_at', currentMonthStart, todayStr)
-  const repMonthLeadCount = repLeadMonthly
-    .filter(r => r.month === currentMonthKey)
-    .reduce((s, r) => s + Number(r.lead_count), 0)
+  const repSalesMonth      = filterByDateRange(repSales, 'dato_kjopt',   currentMonthStart, todayStr)
+  const repNpsMonth        = filterByDateRange(repNps,   'submitted_at', currentMonthStart, todayStr)
+  const repMonthRows       = repLeadMonthly.filter(r => r.month === currentMonthKey)
+  const repMonthLeadCount  = repMonthRows.reduce((s, r) => s + Number(r.teller_true), 0)
+  const repMonthLeadTotal  = repMonthRows.reduce((s, r) => s + Number(r.teller_true) + Number(r.teller_false), 0)
 
   // Last-30-day slices
-  const repSales30         = filterByDateRange(repSales, 'dato_kjopt',   last30Start, todayStr)
-  const repNps30           = filterByDateRange(repNps,   'submitted_at', last30Start, todayStr)
-  const repLast30LeadCount = leadRange30
-    .filter(r => r.kode === rep.kode)
-    .reduce((s, r) => s + Number(r.lead_count), 0)
+  const repSales30          = filterByDateRange(repSales, 'dato_kjopt',   last30Start, todayStr)
+  const repNps30            = filterByDateRange(repNps,   'submitted_at', last30Start, todayStr)
+  const repRange30Rows      = leadRange30.filter(r => r.kode === rep.kode)
+  const repLast30LeadCount  = repRange30Rows.reduce((s, r) => s + Number(r.teller_true), 0)
+  const repLast30LeadTotal  = repRange30Rows.reduce((s, r) => s + Number(r.teller_true) + Number(r.teller_false), 0)
 
   // Lead maps for team median
-  const currentMonthLeadMap = buildLeadMapForMonth(leadMonthly, currentMonthKey)
-  const last30LeadMap       = buildLeadMapFromRange(leadRange30)
+  const currentMonthLeadMap      = buildLeadMapForMonth(leadMonthly, currentMonthKey)
+  const currentMonthLeadTotalMap = buildLeadTotalMapForMonth(leadMonthly, currentMonthKey)
+  const last30LeadMap            = buildLeadMapFromRange(leadRange30)
+  const last30LeadTotalMap       = buildLeadTotalMapFromRange(leadRange30)
 
   // Group all rep sales by 'YYYY-MM' key for the BonusPanel month selector
   const salesByMonth: Record<string, SaleRow[]> = {}
@@ -309,10 +338,10 @@ export function buildDashboard(
 
   return {
     rep,
-    currentMonth:        computeMetrics(repSalesMonth, repMonthLeadCount, repNpsMonth),
-    last30Days:          computeMetrics(repSales30, repLast30LeadCount, repNps30),
-    medianCurrentMonth:  computeTeamMedian(allSales, currentMonthLeadMap, allNps, currentMonthStart, todayStr),
-    medianLast30Days:    computeTeamMedian(allSales, last30LeadMap,       allNps, last30Start,       todayStr),
+    currentMonth:        computeMetrics(repSalesMonth, repMonthLeadCount, repMonthLeadTotal, repNpsMonth),
+    last30Days:          computeMetrics(repSales30, repLast30LeadCount, repLast30LeadTotal, repNps30),
+    medianCurrentMonth:  computeTeamMedian(allSales, currentMonthLeadMap, currentMonthLeadTotalMap, allNps, currentMonthStart, todayStr),
+    medianLast30Days:    computeTeamMedian(allSales, last30LeadMap, last30LeadTotalMap, allNps, last30Start, todayStr),
     trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
     medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
     bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth),

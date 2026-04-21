@@ -409,6 +409,9 @@ export default function Page() {
             medianTrend={data.medianTrend}
             prisDistTrend={data.prisDistTrend}
             fordDistTrend={data.fordDistTrend}
+            currentMonthMetrics={data.currentMonth}
+            last30Metrics={data.last30Days}
+            repKode={data.rep.kode}
           />
           <BonusPanel
             bonus={data.bonus}

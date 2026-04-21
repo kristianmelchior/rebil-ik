@@ -106,7 +106,7 @@ export async function GET(request: Request) {
     const konvLeads = new Map<string, number>()
     for (const l of leadsAgg) {
       if (skipKode(l.kode)) continue
-      konvLeads.set(l.kode, (konvLeads.get(l.kode) ?? 0) + Number(l.lead_count))
+      konvLeads.set(l.kode, (konvLeads.get(l.kode) ?? 0) + Number(l.teller_true))
     }
 
     // ── NPS ──

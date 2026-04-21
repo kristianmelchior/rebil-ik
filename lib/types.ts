@@ -61,7 +61,8 @@ export interface Rep {
 // Metrics for one time period
 export interface PeriodMetrics {
   bilerKjopt: number
-  leads: number
+  leads: number         // teller_lead=true count — used for konverteringsrate and bonus
+  leadsTotal: number    // true + false — used for stacked chart and median line
   konverteringsrate: number | null   // null if leads === 0
   npsScore: number | null            // null if no NPS rows
   npsCount: number
@@ -135,14 +136,16 @@ export interface RepDashboard {
 export interface LeadMonthlyAgg {
   kode: string
   teamleder: string
-  month: string       // 'YYYY-MM'
-  lead_count: number
+  month: string        // 'YYYY-MM'
+  teller_true: number
+  teller_false: number
 }
 
 export interface LeadRangeAgg {
   kode: string
   teamleder: string
-  lead_count: number
+  teller_true: number
+  teller_false: number
 }
 
 // Boooom! feed — /api/feed/reactions

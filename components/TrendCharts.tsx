@@ -4,7 +4,7 @@
 // Row 1: standard bar+line for Kjøpt/Leads/Konvertering/NPS.
 // Row 2: stacked 100% bar for Fullpris/Fastpris distributions; disabled for Konv plt./Kontakttid.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   ComposedChart, Bar, Line, XAxis, YAxis,
   CartesianGrid, ResponsiveContainer, Tooltip,
@@ -13,11 +13,12 @@ import {
 import type { PeriodMetrics, PrisDistPoint, FordDistPoint } from '@/lib/types'
 import type { TrendMetric } from '@/lib/formatDisplay'
 import { fmtTrendMetric } from '@/lib/formatDisplay'
+import { workdaysInMonth, elapsedWorkdaysInMonth } from '@/lib/workdays'
 
 const BRAND_RED = 'var(--rebil-red)'
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Des']
 
-type ExtMetric = TrendMetric | 'prisDist' | 'fordDist'
+type ExtMetric = TrendMetric | 'prisDist' | 'fordDist' | 'leadstildeling'
 
 // ─── Row 1 options (mirrors KpiTiles row) ────────────────────────────────────
 const ROW1: { label: string; value: ExtMetric }[] = [
@@ -66,6 +67,35 @@ function StandardTooltip({
   )
 }
 
+// ─── Tooltip for stacked leads chart ─────────────────────────────────────────
+function LeadsTooltip({
+  active, payload, label,
+}: {
+  active?: boolean
+  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown }>
+  label?: unknown
+}) {
+  if (!active || !payload?.length || label == null) return null
+  const ym = String(label)
+  const monthName = MONTH_ABBR[parseInt(ym.slice(5, 7), 10) - 1]
+  const trueRaw  = payload.find(p => p.dataKey === 'leadsTrue')?.value
+  const falseRaw = payload.find(p => p.dataKey === 'leadsFalse')?.value
+  const medRaw   = payload.find(p => p.dataKey === 'medianTotal')?.value
+  const trueVal  = typeof trueRaw  === 'number' ? trueRaw  : NaN
+  const falseVal = typeof falseRaw === 'number' ? falseRaw : NaN
+  const medVal   = typeof medRaw   === 'number' ? medRaw   : NaN
+  const total = !Number.isNaN(trueVal) && !Number.isNaN(falseVal) ? trueVal + falseVal : NaN
+  return (
+    <div className="bg-surface border border-border rounded-lg px-3 py-2 text-xs shadow-sm">
+      <p className="font-medium text-text-primary mb-1">{monthName}</p>
+      <p className="text-text-secondary">Totalt: {!Number.isNaN(total) ? total : '—'}</p>
+      <p className="text-text-secondary">Teller: {!Number.isNaN(trueVal) ? trueVal : '—'}</p>
+      <p className="text-text-secondary">Helgevakt, teller ikke: {!Number.isNaN(falseVal) ? falseVal : '—'}</p>
+      <p className="text-text-secondary">Median totalt: {!Number.isNaN(medVal) ? Math.round(medVal) : '—'}</p>
+    </div>
+  )
+}
+
 // ─── Tooltip for stacked dist chart ──────────────────────────────────────────
 function DistTooltip({
   active, payload, label, keys, labels,
@@ -96,23 +126,100 @@ function DistTooltip({
   )
 }
 
+// ─── Split progress bar ───────────────────────────────────────────────────────
+// Left zone (2/3): 0 → target. Right zone (1/3): target → target×1.5 (overflow).
+// Dark grey when under target, green when at or above.
+function SplitProgressBar({ value, target }: { value: number; target: number }) {
+  const isOver = target > 0 && value >= target
+  const fillColor = isOver ? '#22c55e' : '#555555'
+  const leftFillPct = target > 0 ? Math.min(100, Math.round((Math.min(value, target) / target) * 100)) : 0
+  const rightFillPct = isOver
+    ? Math.min(100, Math.round(((value - target) / (target * 0.5)) * 100))
+    : 0
+  return (
+    <div className="relative">
+      <div className="flex h-7 items-stretch">
+        <div className="relative bg-[#EBEBEB] rounded-l-full overflow-hidden" style={{ flex: 2 }}>
+          <div className="h-full transition-all" style={{ width: `${leftFillPct}%`, backgroundColor: fillColor }} />
+        </div>
+        <div className="w-[2px] bg-[#aaaaaa] shrink-0 self-stretch" />
+        <div className="relative bg-[#EBEBEB] rounded-r-full overflow-hidden" style={{ flex: 1 }}>
+          {rightFillPct > 0 && (
+            <div className="h-full transition-all" style={{ width: `${rightFillPct}%`, backgroundColor: '#22c55e' }} />
+          )}
+        </div>
+      </div>
+      <span
+        className="absolute text-xs text-text-muted whitespace-nowrap"
+        style={{ left: 'calc(66.67%)', top: '100%', marginTop: '3px', transform: 'translateX(-50%)' }}
+      >
+        Target = {target}
+      </span>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface TrendChartsProps {
-  trend?:          (PeriodMetrics & { month: string })[]
-  medianTrend?:    (PeriodMetrics & { month: string })[]
-  prisDistTrend?:  PrisDistPoint[]
-  fordDistTrend?:  FordDistPoint[]
+  trend?:                (PeriodMetrics & { month: string })[]
+  medianTrend?:          (PeriodMetrics & { month: string })[]
+  prisDistTrend?:        PrisDistPoint[]
+  fordDistTrend?:        FordDistPoint[]
+  currentMonthMetrics?:  PeriodMetrics
+  last30Metrics?:        PeriodMetrics
+  repKode?:              string
 }
 
-export default function TrendCharts({ trend = [], medianTrend = [], prisDistTrend = [], fordDistTrend = [] }: TrendChartsProps) {
+export default function TrendCharts({
+  trend = [], medianTrend = [], prisDistTrend = [], fordDistTrend = [],
+  currentMonthMetrics, last30Metrics, repKode,
+}: TrendChartsProps) {
   const [metric, setMetric] = useState<ExtMetric>('npsScore')
+  const [leadsTargetInput, setLeadsTargetInput] = useState('')
+  const [leadsTarget, setLeadsTarget] = useState<number | null>(null)
+  const [leadsPeriod, setLeadsPeriod] = useState<'month' | '30d'>('month')
+
+  useEffect(() => {
+    if (!repKode) return
+    const saved = localStorage.getItem(`leads_target_${repKode}`)
+    if (saved) {
+      setLeadsTarget(Number(saved))
+      setLeadsTargetInput(saved)
+    } else {
+      setLeadsTarget(null)
+      setLeadsTargetInput('')
+    }
+  }, [repKode])
+
+  function handleTargetChange(val: string) {
+    setLeadsTargetInput(val)
+    const n = parseInt(val, 10)
+    if (!isNaN(n) && n > 0) {
+      setLeadsTarget(n)
+      if (repKode) localStorage.setItem(`leads_target_${repKode}`, String(n))
+    } else if (val === '') {
+      setLeadsTarget(null)
+      if (repKode) localStorage.removeItem(`leads_target_${repKode}`)
+    }
+  }
 
   const currentMonthKey = new Date().toISOString().slice(0, 7)
   const isDistMetric = metric === 'prisDist' || metric === 'fordDist'
 
-  // ── Standard chart data (only computed for standard metrics) ──
-  const standardData = isDistMetric ? [] : trend.map((point, i) => {
+  // ── Stacked leads chart data ──
+  const leadsData = metric !== 'leads' ? [] : trend.map((point, i) => {
+    const isFuture = point.month > currentMonthKey
+    return {
+      month:       point.month,
+      leadsTrue:   isFuture ? null : point.leads,
+      leadsFalse:  isFuture ? null : Math.max(0, point.leadsTotal - point.leads),
+      medianTotal: isFuture ? null : (medianTrend[i]?.leadsTotal ?? 0),
+    }
+  })
+
+  // ── Standard chart data (only computed for non-leads, non-dist, non-leadstildeling metrics) ──
+  const standardData = (isDistMetric || metric === 'leads' || metric === 'leadstildeling') ? [] : trend.map((point, i) => {
     const isFuture = point.month > currentMonthKey
     const m = metric as TrendMetric
     return {
@@ -168,7 +275,7 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
       <div className="flex items-start justify-between mb-4">
         <h2 className="text-xl font-medium text-text-primary">Trend</h2>
 
-        {/* Two-row pill toggle — both rows share the same width */}
+        {/* Three-row pill toggle */}
         <div className="flex flex-col gap-1.5 w-[340px]">
           {/* Row 1 */}
           <div className="flex bg-[#EBEBEB] rounded-pill p-[3px] gap-0.5">
@@ -205,14 +312,141 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
               </button>
             ))}
           </div>
+          {/* Row 3 */}
+          <div className="flex bg-[#EBEBEB] rounded-pill p-[3px]">
+            <button
+              onClick={() => setMetric('leadstildeling')}
+              className={
+                metric === 'leadstildeling'
+                  ? `${pillBase} flex-1 bg-[var(--rebil-red)] text-white`
+                  : `${pillBase} flex-1 bg-transparent text-text-muted hover:text-text-primary`
+              }
+            >
+              Leadstildeling
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="bg-surface border border-border rounded-card p-6">
+
+        {/* ── Leadstildeling view ── */}
+        {metric === 'leadstildeling' ? (() => {
+          const today = new Date()
+          const yr = today.getFullYear()
+          const mo = today.getMonth() + 1
+          const totalWd = workdaysInMonth(yr, mo)
+          const elapsedWd = elapsedWorkdaysInMonth(yr, mo)
+          const remainingWd = totalWd - elapsedWd
+
+          const metrics = leadsPeriod === 'month' ? currentMonthMetrics : last30Metrics
+          const actual = metrics?.leads ?? 0
+          const actualTotal = metrics?.leadsTotal ?? 0
+
+          const trendFactor = leadsPeriod === 'month' && remainingWd < totalWd && elapsedWd > 0
+            ? totalWd / elapsedWd
+            : 1
+          const projected = Math.round(actual * trendFactor)
+
+          const targetVal = leadsTarget ?? 0
+
+          return (
+            <div className="flex flex-col gap-8">
+              {/* Controls */}
+              <div className="flex items-end justify-between gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-text-muted">Target antall leads</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={leadsTargetInput}
+                    onChange={e => handleTargetChange(e.target.value)}
+                    placeholder="Skriv inn target"
+                    className="border border-border rounded-lg px-3 py-1.5 text-sm w-36 bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-[var(--rebil-red)]"
+                  />
+                </div>
+                <div className="flex bg-[#EBEBEB] rounded-pill p-[3px] gap-0.5">
+                  <button
+                    onClick={() => setLeadsPeriod('month')}
+                    className={leadsPeriod === 'month'
+                      ? `${pillBase} bg-[var(--rebil-red)] text-white px-4`
+                      : `${pillBase} bg-transparent text-text-muted hover:text-text-primary px-4`}
+                  >
+                    Inneværende måned
+                  </button>
+                  <button
+                    onClick={() => setLeadsPeriod('30d')}
+                    className={leadsPeriod === '30d'
+                      ? `${pillBase} bg-[var(--rebil-red)] text-white px-4`
+                      : `${pillBase} bg-transparent text-text-muted hover:text-text-primary px-4`}
+                  >
+                    Siste 30 dager
+                  </button>
+                </div>
+              </div>
+
+              {/* Bar 1: Faktisk teller-leads vs target */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-xs text-text-secondary">
+                  <span>Faktisk (Teller): <strong className="text-text-primary">{actual}</strong></span>
+                  {targetVal === 0 && <span className="text-text-muted italic">Ingen target satt</span>}
+                </div>
+                {targetVal > 0
+                  ? <SplitProgressBar value={actual} target={targetVal} />
+                  : <div className="h-7 bg-[#EBEBEB] rounded-full" />
+                }
+              </div>
+
+              {/* Bar 2: Projisert (trendlinje) vs target */}
+              <div className="flex flex-col gap-1">
+                <div className="flex justify-between text-xs text-text-secondary">
+                  <span>Trend (projisert): <strong className="text-text-primary">{targetVal > 0 ? projected : '—'}</strong></span>
+                  {leadsPeriod === 'month' && (
+                    <span className="text-text-muted">{elapsedWd} av {totalWd} arbeidsdager brukt</span>
+                  )}
+                </div>
+                {targetVal > 0
+                  ? <SplitProgressBar value={projected} target={targetVal} />
+                  : <div className="h-7 bg-[#EBEBEB] rounded-full" />
+                }
+              </div>
+            </div>
+          )
+        })() : (
+        <>
+        {metric === 'leads' && (
+          <p className="text-xs text-text-muted text-right mb-2 italic">
+            Overload leads, dvs leads over grense som ikke teller, er ikke lagt til enda
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={260}>
 
-          {/* ── Pris distribution chart ── */}
-          {metric === 'prisDist' ? (
+          {/* ── Stacked leads chart ── */}
+          {metric === 'leads' ? (
+            <ComposedChart data={leadsData} margin={{ top: 28, right: 8, bottom: 0, left: 4 }}>
+              <CartesianGrid vertical={false} stroke="#F0F0F0" />
+              <XAxis {...xAxisProps} />
+              <YAxis {...yAxisProps} />
+              <Tooltip
+                content={({ active, payload, label }) => (
+                  <LeadsTooltip active={active} payload={payload} label={label} />
+                )}
+              />
+              <Bar dataKey="leadsTrue" stackId="ls" fill={BRAND_RED}>
+                <LabelList
+                  position="insideTop"
+                  fill="#ffffff"
+                  fontSize={11}
+                  fontWeight={600}
+                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? String(v) : ''}
+                />
+              </Bar>
+              <Bar dataKey="leadsFalse" stackId="ls" fill="#CCCCCC" radius={[3, 3, 0, 0]} />
+              <Line dataKey="medianTotal" stroke="#111111" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+            </ComposedChart>
+
+          /* ── Pris distribution chart ── */
+          ) : metric === 'prisDist' ? (
             <ComposedChart data={prisData} margin={{ top: 8, right: 8, bottom: 0, left: 4 }}>
               <CartesianGrid vertical={false} stroke="#F0F0F0" />
               <XAxis {...xAxisProps} />
@@ -316,6 +550,21 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
               </>
             )}
           </div>
+        ) : metric === 'leads' ? (
+          <div className="flex justify-end gap-5 mt-3">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: BRAND_RED }} />
+              <span className="text-xs text-text-secondary">Teller</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#CCCCCC' }} />
+              <span className="text-xs text-text-secondary">Helgevakt, teller ikke</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-5 h-0.5 bg-text-primary" />
+              <span className="text-xs text-text-secondary">Median</span>
+            </div>
+          </div>
         ) : (
           <div className="flex justify-end gap-5 mt-3">
             <div className="flex items-center gap-1.5">
@@ -327,6 +576,8 @@ export default function TrendCharts({ trend = [], medianTrend = [], prisDistTren
               <span className="text-xs text-text-secondary">Median</span>
             </div>
           </div>
+        )}
+        </>
         )}
       </div>
     </section>
