@@ -5,16 +5,17 @@ import { useState } from 'react'
 interface Props {
   title:        React.ReactNode
   defaultOpen?: boolean
+  onOpen?:      () => void
   children:     React.ReactNode
 }
 
-export default function CollapsibleSection({ title, defaultOpen = true, children }: Props) {
+export default function CollapsibleSection({ title, defaultOpen = true, onOpen, children }: Props) {
   const [open, setOpen] = useState(defaultOpen)
 
   return (
     <div className="bg-white border border-border rounded-card overflow-hidden">
       <button
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { const next = !open; setOpen(next); if (next) onOpen?.() }}
         className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#FAFAFA] transition-colors text-left"
       >
         <div className="flex items-center gap-2 text-xs font-semibold text-text-muted uppercase tracking-wide">

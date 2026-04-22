@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getAllRepsAdmin } from '@/lib/tl/admin-db'
 import { PIPELINE_CATEGORIES, ALL_STAGES } from '@/lib/tl/pipeline-config'
 import PipelineOverview, { type CategoryData, type RepDeepDive } from './_components/PipelineOverview'
+import OpryddingSection from './_components/OpryddingSection'
 import { getRepByKode } from '@/lib/db'
 import { SESSION_COOKIE_NAME } from '@/lib/auth'
 import { isTlSuperadmin } from '@/lib/tl/superadmin'
@@ -193,6 +194,9 @@ export default async function TlDashboardPage({
         reps={repRows}
         lastSyncedAt={lastSyncedAt}
       />
+
+      {/* ── Opprydding ───────────────────────────────────────────────────── */}
+      <OpryddingSection tlFilter={effectiveTl} />
 
       {/* ── Pipeline table ────────────────────────────────────────────────── */}
       <div className="pt-2">
