@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
-import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg } from './types'
+import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidRangeAgg, KonvPerKontakttidRow } from './types'
 
 // Cache TTLs (seconds)
 const TTL_SALES_DATA = 300  // 5 min — sales/leads/NPS shared across all users
@@ -262,6 +262,18 @@ export const getKontakttidMonthly = unstable_cache(
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
+// Kontakttid counts per rep/kategori for an arbitrary date range.
+// Input: from/to (YYYY-MM-DD strings)  Output: KontakttidRangeAgg[]
+export const getKontakttidRange = unstable_cache(
+  async (from: string, to: string): Promise<KontakttidRangeAgg[]> => {
+    const { data, error } = await supabase.rpc('get_kontakttid_range', { p_from: from, p_to: to })
+    if (error) throw error
+    return (data ?? []) as KontakttidRangeAgg[]
+  },
+  ['kontakttid-range'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
 // Average kontakttid (days) per rep per month based on dato_kontaktet_kunde_main_eller_avslag.
 export const getKontakttidAvgMonthly = unstable_cache(
   async (year: number): Promise<KontakttidAvgAgg[]> => {
@@ -452,4 +464,24 @@ export async function insertFeedComment(
     body,
     created_at,
   }
+}
+
+// Conversion rate per kontakttid_kategori — counts from leads table only.
+// Input: from/to (YYYY-MM-DD strings)  Output: KonvPerKontakttidRow[]
+export const getKonvPerKontakttid = unstable_cache(
+  async (from: string, to: string): Promise<KonvPerKontakttidRow[]> => {
+    const { data, error } = await supabase.rpc('get_konv_per_kontakttid', { p_from: from, p_to: to })
+    if (error) throw error
+    return (data ?? []) as KonvPerKontakttidRow[]
+  },
+  ['konv-per-kontakttid'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Lead tildeling: per-person counts of leads received (tildelt) and lost (mistet)
+// for an arbitrary date range, based on rep_name vs dealowner_assigned_to.
+export async function getLeadTildeling(from: string, to: string): Promise<{ name: string; teamleder: string; tildelt: number; mistet: number }[]> {
+  const { data, error } = await supabase.rpc('get_lead_tildeling', { p_from: from, p_to: to })
+  if (error) throw error
+  return (data ?? []) as { name: string; teamleder: string; tildelt: number; mistet: number }[]
 }

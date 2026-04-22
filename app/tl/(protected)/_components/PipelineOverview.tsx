@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import CollapsibleSection from './CollapsibleSection'
+import type { ReviewRow } from '@/app/tl/api/pipeline/review/route'
 
 export interface CategoryData {
   name:        string
@@ -39,11 +40,34 @@ interface TooltipState {
 const HS_URL = (dealId: string) =>
   `https://app-eu1.hubspot.com/contacts/25445101/record/0-3/${dealId}/`
 
+const SNOOZE_PRESETS = [
+  { days: 2,  label: '2 dager',    hint: 'Standard' },
+  { days: 5,  label: '5 dager',    hint: null },
+  { days: 7,  label: '1 uke',      hint: null },
+  { days: 14, label: '2 uker',     hint: null },
+  { days: 30, label: '1 måned',    hint: null },
+]
+
 function rottenBadgeClass(rottenCount: number, total: number): string {
   const pct = total > 0 ? rottenCount / total : 0
   if (pct > 0.5)  return 'bg-[#FCEBEB] text-[#A32D2D]'
   if (pct > 0.25) return 'bg-[#FDE8D0] text-[#C2580A]'
   return 'text-text-muted'
+}
+
+function snoozeUntil(r: ReviewRow): Date {
+  const d = new Date(r.reviewed_at)
+  d.setDate(d.getDate() + r.snooze_days)
+  return d
+}
+
+function reviewStatus(r: ReviewRow | undefined): 'active' | 'expired' | 'none' {
+  if (!r) return 'none'
+  return new Date() < snoozeUntil(r) ? 'active' : 'expired'
+}
+
+function daysAgo(r: ReviewRow): number {
+  return Math.floor((Date.now() - new Date(r.reviewed_at).getTime()) / 86_400_000)
 }
 
 interface Props {
@@ -60,6 +84,63 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
   const [repLimits,   setRepLimits]   = useState<Record<string, number>>({})
   const [repLoading,  setRepLoading]  = useState<Record<string, boolean>>({})
   const [copied,      setCopied]      = useState<string | null>(null)
+
+  // Review state
+  const [reviews,      setReviews]      = useState<Record<string, ReviewRow>>({})
+  const [snoozeOpen,    setSnoozeOpen]    = useState<string | null>(null)
+  const [customDays,    setCustomDays]    = useState<string>('')
+  const [reviewPending, setReviewPending] = useState<Set<string>>(new Set())
+  const customInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    void fetch('/tl/api/pipeline/review', { credentials: 'include' })
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: ReviewRow[]) => {
+        const map: Record<string, ReviewRow> = {}
+        for (const r of rows) map[r.deal_id] = r
+        setReviews(map)
+      })
+      .catch(() => {})
+  }, [])
+
+  async function markReviewed(dealId: string, snoozeDays: number) {
+    setSnoozeOpen(null)
+    setReviewPending(s => new Set(s).add(dealId))
+    try {
+      const res = await fetch('/tl/api/pipeline/review', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deal_id: dealId, snooze_days: snoozeDays }),
+      })
+      if (res.ok) {
+        // Re-fetch to get reviewed_by from server
+        const all = await fetch('/tl/api/pipeline/review', { credentials: 'include' }).then(r => r.json()) as ReviewRow[]
+        const map: Record<string, ReviewRow> = {}
+        for (const r of all) map[r.deal_id] = r
+        setReviews(map)
+      }
+    } finally {
+      setReviewPending(s => { const n = new Set(s); n.delete(dealId); return n })
+    }
+  }
+
+  async function unmarkReviewed(dealId: string) {
+    setReviewPending(s => new Set(s).add(dealId))
+    try {
+      const res = await fetch('/tl/api/pipeline/review', {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deal_id: dealId }),
+      })
+      if (res.ok) {
+        setReviews(prev => { const n = { ...prev }; delete n[dealId]; return n })
+      }
+    } finally {
+      setReviewPending(s => { const n = new Set(s); n.delete(dealId); return n })
+    }
+  }
 
   const max = Math.max(...categories.map(c => c.count), 1)
 
@@ -272,7 +353,7 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                                     {copied === rep.name ? (
                                       <><svg className="w-3 h-3 text-[#639922]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg> Kopiert!</>
                                     ) : (
-                                      <><svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="1" width="7" height="8" rx="1"/><path d="M1 4v7h7"/></svg> Kopier til Slack</>
+                                      <><svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="1" width="7" height="8" rx="1"/><path d="M1 4v7"/></svg> Kopier til Slack</>
                                     )}
                                   </button>
                                 </div>
@@ -285,33 +366,117 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                                       <th className="text-left font-medium pb-1.5 pr-4">Siste aktivitet</th>
                                       <th className="text-left font-medium pb-1.5 pr-4">Dager</th>
                                       <th className="text-left font-medium pb-1.5">Neste aktivitet</th>
+                                      <th className="text-left font-medium pb-1.5 pl-4 w-6" />
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {deals.map(deal => (
-                                      <tr key={deal.deal_id} className="border-t border-border/50">
-                                        <td className="py-1.5 pr-4">
-                                          <a
-                                            href={HS_URL(deal.deal_id)}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="text-[#185FA5] hover:underline"
-                                          >
-                                            {deal.deal_name ?? deal.deal_id}
-                                          </a>
-                                        </td>
-                                        <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.stage_name ?? '—'}</td>
-                                        <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.create_date ?? '—'}</td>
-                                        <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.last_activity_at ?? '—'}</td>
-                                        <td className="py-1.5 pr-4 font-medium text-[#A32D2D] whitespace-nowrap">{deal.days_since}d</td>
-                                        <td className="py-1.5 text-text-muted whitespace-nowrap">
-                                          {deal.next_activity_date
-                                            ? new Date(deal.next_activity_date).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
-                                            : <span className="text-[#C2580A]">Ikke satt</span>
-                                          }
-                                        </td>
-                                      </tr>
-                                    ))}
+                                    {deals.map(deal => {
+                                      const review = reviews[deal.deal_id]
+                                      const status = reviewStatus(review)
+                                      const pending = reviewPending.has(deal.deal_id)
+
+                                      const rowBg =
+                                        status === 'active'  ? 'bg-[#F0FBF0]' :
+                                        status === 'expired' ? 'bg-[#FFFBEB]' : ''
+
+                                      return (
+                                        <tr key={deal.deal_id} className={`border-t border-border/50 ${rowBg}`}>
+                                          <td className="py-1.5 pr-4">
+                                            <a
+                                              href={HS_URL(deal.deal_id)}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[#185FA5] hover:underline"
+                                            >
+                                              {deal.deal_name ?? deal.deal_id}
+                                            </a>
+                                            {status === 'expired' && review && (
+                                              <span className="ml-2 text-[10px] text-[#C2580A]">
+                                                Gjennomgått for {daysAgo(review)}d siden — inaktiv igjen
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.stage_name ?? '—'}</td>
+                                          <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.create_date ?? '—'}</td>
+                                          <td className="py-1.5 pr-4 text-text-muted whitespace-nowrap">{deal.last_activity_at ?? '—'}</td>
+                                          <td className="py-1.5 pr-4 font-medium text-[#A32D2D] whitespace-nowrap">{deal.days_since}d</td>
+                                          <td className="py-1.5 text-text-muted whitespace-nowrap">
+                                            {deal.next_activity_date
+                                              ? new Date(deal.next_activity_date).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
+                                              : <span className="text-[#C2580A]">Ikke satt</span>
+                                            }
+                                          </td>
+                                          <td className="py-1.5 pl-4 whitespace-nowrap relative">
+                                            {status === 'active' ? (
+                                              <button
+                                                onClick={() => void unmarkReviewed(deal.deal_id)}
+                                                disabled={pending}
+                                                title={`Gjennomgått av ${review!.reviewed_by} — klikk for å fjerne`}
+                                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#D1FAD1] text-[#276527] hover:bg-[#BBF0BB] transition-colors disabled:opacity-50"
+                                              >
+                                                <svg className="w-2.5 h-2.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
+                                                OK
+                                              </button>
+                                            ) : (
+                                              <div className="relative">
+                                                <button
+                                                  onClick={() => { setSnoozeOpen(o => o === deal.deal_id ? null : deal.deal_id); setCustomDays('') }}
+                                                  disabled={pending}
+                                                  title="Merk som gjennomgått"
+                                                  className="p-0.5 rounded text-text-muted hover:text-[#276527] hover:bg-[#D1FAD1] transition-colors disabled:opacity-50"
+                                                >
+                                                  <svg className="w-3.5 h-3.5" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg>
+                                                </button>
+                                                {snoozeOpen === deal.deal_id && (
+                                                  <div className="absolute right-0 top-6 z-50 bg-white border border-border rounded-lg shadow-lg py-2 min-w-[180px]">
+                                                    <p className="px-3 pb-1.5 text-[10px] font-semibold text-text-muted uppercase tracking-wide">Snooze i</p>
+                                                    {SNOOZE_PRESETS.map(({ days, label, hint }) => (
+                                                      <button
+                                                        key={days}
+                                                        onClick={() => void markReviewed(deal.deal_id, days)}
+                                                        className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-primary hover:bg-[#F0FBF0] hover:text-[#276527] transition-colors group"
+                                                      >
+                                                        <span className={hint ? 'font-semibold' : 'font-normal'}>{label}</span>
+                                                        {hint && <span className="text-[10px] text-text-muted group-hover:text-[#276527]/70">{hint}</span>}
+                                                      </button>
+                                                    ))}
+                                                    <div className="border-t border-border mx-2 mt-1.5 pt-2 flex items-center gap-1.5 px-1">
+                                                      <input
+                                                        ref={customInputRef}
+                                                        type="number"
+                                                        min={1}
+                                                        max={365}
+                                                        value={customDays}
+                                                        onChange={e => setCustomDays(e.target.value)}
+                                                        onKeyDown={e => {
+                                                          if (e.key === 'Enter') {
+                                                            const n = parseInt(customDays, 10)
+                                                            if (n > 0) void markReviewed(deal.deal_id, n)
+                                                          }
+                                                        }}
+                                                        placeholder="Antall"
+                                                        className="w-16 text-xs border border-border rounded px-2 py-1 outline-none focus:border-[#276527] [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                                      />
+                                                      <span className="text-xs text-text-muted">dager</span>
+                                                      <button
+                                                        onClick={() => {
+                                                          const n = parseInt(customDays, 10)
+                                                          if (n > 0) void markReviewed(deal.deal_id, n)
+                                                        }}
+                                                        disabled={!customDays || parseInt(customDays, 10) < 1}
+                                                        className="ml-auto text-[11px] font-medium px-2 py-1 rounded bg-[#276527] text-white hover:bg-[#1e4d1e] disabled:opacity-40 transition-colors"
+                                                      >
+                                                        Snooze
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      )
+                                    })}
                                   </tbody>
                                 </table>
                                 {deals.length === (repLimits[rep.name] ?? 10) && (
@@ -357,6 +522,11 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
             </div>
           ))}
         </div>
+      )}
+
+      {/* Close snooze popover on outside click */}
+      {snoozeOpen && (
+        <div className="fixed inset-0 z-40" onClick={() => setSnoozeOpen(null)} />
       )}
     </>
   )

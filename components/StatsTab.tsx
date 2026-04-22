@@ -57,12 +57,14 @@ interface ColDef {
 }
 
 const COLS: ColDef[] = [
-  { key: 'bilerKjopt',   label: 'Biler kjøpt',   fmt: r => fmt(r.bilerKjopt),            primary: true  },
-  { key: 'fullprisPct',  label: 'Andel fullpris', fmt: r => fmtPct(r.fullprisPct),        primary: true  },
-  { key: 'konvertering', label: 'Konvertering',   fmt: r => fmtKonv(r.konvertering),      primary: true  },
-  { key: 'npsScore',     label: 'NPS',            fmt: r => fmtNps(r.npsScore),           primary: true  },
-  { key: 'leads',        label: 'Leads',          fmt: r => fmt(r.leads),                 primary: false },
-  { key: 'fastprisPct',  label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),        primary: false, neutral: true },
+  { key: 'bilerKjopt',        label: 'Biler kjøpt',    fmt: r => fmt(r.bilerKjopt),               primary: true  },
+  { key: 'fullprisPct',       label: 'Andel fullpris', fmt: r => fmtPct(r.fullprisPct),           primary: true  },
+  { key: 'konvertering',      label: 'Konvertering',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
+  { key: 'npsScore',          label: 'NPS',            fmt: r => fmtNps(r.npsScore),              primary: true  },
+  { key: 'konvPlattformRate', label: 'Konv plt.',      fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
+  { key: 'sameDagPct',        label: 'Kontakttid',     fmt: r => fmtPct(r.sameDagPct),            primary: false },
+  { key: 'leads',             label: 'Leads',          fmt: r => fmt(r.leads),                    primary: false },
+  { key: 'fastprisPct',       label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
 ]
 
 // ─── Conditional formatting ───────────────────────────────────────────────────
@@ -110,22 +112,27 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
   const totalBiler  = rows.reduce((s, r) => s + r.bilerKjopt, 0)
   const totalLeads  = rows.reduce((s, r) => s + r.leads, 0)
 
-  const konvRows    = rows.filter(r => r.konvertering !== null)
-  const npsRows     = rows.filter(r => r.npsScore     !== null)
-  const prisRows    = rows.filter(r => r.fullprisPct  !== null)
-  const fastRows    = rows.filter(r => r.fastprisPct  !== null)
+  const konvRows    = rows.filter(r => r.konvertering      !== null)
+  const npsRows     = rows.filter(r => r.npsScore          !== null)
+  const prisRows    = rows.filter(r => r.fullprisPct       !== null)
+  const fastRows    = rows.filter(r => r.fastprisPct       !== null)
+  const pltRows     = rows.filter(r => r.konvPlattformRate !== null)
+  const ktRows      = rows.filter(r => r.sameDagPct        !== null)
 
   return {
     kode: '__total__',
     rep_name: 'Total',
     teamleder: '',
     teamlederInitials: '',
-    bilerKjopt:   totalBiler,
-    leads:        totalLeads,
-    konvertering: konvRows.length === 0  ? null : konvRows.reduce((s, r)  => s + r.konvertering!, 0)  / konvRows.length,
-    npsScore:     npsRows.length  === 0  ? null : npsRows.reduce((s, r)   => s + r.npsScore!,     0)  / npsRows.length,
-    fullprisPct:  prisRows.length === 0  ? null : prisRows.reduce((s, r)  => s + r.fullprisPct!,  0)  / prisRows.length,
-    fastprisPct:  fastRows.length === 0  ? null : fastRows.reduce((s, r)  => s + r.fastprisPct!,  0)  / fastRows.length,
+    bilerKjopt:        totalBiler,
+    leads:             totalLeads,
+    konvertering:      konvRows.length === 0 ? null : konvRows.reduce((s, r) => s + r.konvertering!,      0) / konvRows.length,
+    npsScore:          npsRows.length  === 0 ? null : npsRows.reduce((s, r)  => s + r.npsScore!,          0) / npsRows.length,
+    fullprisPct:       prisRows.length === 0 ? null : prisRows.reduce((s, r) => s + r.fullprisPct!,       0) / prisRows.length,
+    fastprisPct:       fastRows.length === 0 ? null : fastRows.reduce((s, r) => s + r.fastprisPct!,       0) / fastRows.length,
+    konvPlattformRate:    pltRows.length  === 0 ? null : pltRows.reduce((s, r)  => s + r.konvPlattformRate!, 0) / pltRows.length,
+    sameDagPct:           ktRows.length   === 0 ? null : ktRows.reduce((s, r)   => s + r.sameDagPct!,        0) / ktRows.length,
+    kontakttidBreakdown:  {},
   }
 }
 
@@ -268,7 +275,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
                 </tr>
               ))
             ) : filteredRows.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-12 text-center text-text-muted text-sm">Ingen data</td></tr>
+              <tr><td colSpan={9} className="px-4 py-12 text-center text-text-muted text-sm">Ingen data</td></tr>
             ) : (
               filteredRows.map((row, i) => (
                 <tr
@@ -319,6 +326,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
           )}
         </table>
       </div>
+
     </div>
   )
 }

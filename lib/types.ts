@@ -132,6 +132,13 @@ export interface KontakttidAvgAgg {
   avg_days: number
 }
 
+export interface KontakttidRangeAgg {
+  kode: string
+  teamleder: string
+  kontakttid_kategori: string
+  lead_count: number
+}
+
 export interface KontakttidPoint {
   month: string
   total: number
@@ -149,6 +156,12 @@ export interface KonvPlattformPoint {
   month: string
   rate: number | null  // plattform_count / total_leads (0–1), null if no leads
   count: number        // absolute plattform_count for this month
+}
+
+export interface KonvPerKontakttidRow {
+  kontakttid_kategori: string
+  leads: number
+  kjopt: number
 }
 
 // Full dashboard payload — returned by GET /api/data
