@@ -9,12 +9,15 @@ import { SESSION_COOKIE_NAME, isTeamleder } from '@/lib/auth'
 import { isTlSuperadmin } from '@/lib/tl/superadmin'
 
 export interface FlaggedDeal {
-  deal_id:    string
-  deal_name:  string | null
-  stage_name: string | null
-  owner_name: string | null  // from hubspot_owner_id → reps
-  ik_name:    string | null  // from referent___owner → reps
-  reason:     'no_owner' | 'owner_not_rep' | 'owner_mismatch'
+  deal_id:          string
+  deal_name:        string | null
+  stage_name:       string | null
+  owner_name:       string | null  // from hubspot_owner_id → reps (null if not in reps)
+  hubspot_owner_id: string | null  // raw HS owner id (set even if owner_name is null)
+  ik_name:          string | null  // from referent___owner → reps
+  ik_kode:          string | null
+  create_date:      string | null
+  reason:           'no_owner' | 'owner_not_rep' | 'owner_mismatch'
 }
 
 function getAdminClient() {
@@ -38,10 +41,17 @@ export async function GET(request: Request) {
   if (!allowed) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(request.url)
-  const tl = searchParams.get('tl') || null
+  const tlParam = searchParams.get('tl')
+  const tl = (!tlParam || tlParam === '__all__') ? null : tlParam
 
-  const { data, error } = await getAdminClient()
-    .rpc('get_flagged_deals', { p_tl: tl })
+  const supabase = getAdminClient()
+
+  const { data: settingData } = await supabase
+    .from('settings').select('value').eq('key', 'opprydding_ansvarlig_tl').maybeSingle()
+  const ansvarligTl = settingData?.value ?? null
+
+  const { data, error } = await supabase
+    .rpc('get_flagged_deals', { p_tl: tl, p_ansvarlig_tl: ansvarligTl })
 
   if (error) return Response.json({ error: error.message }, { status: 500 })
   return Response.json(data ?? [])

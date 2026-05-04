@@ -102,8 +102,10 @@ async function fetchAll<T>(
 // Derive tier from rolle string as specified.
 // Input: rolle (string from reps table)  Output: 'IK' | 'Senior' | 'Spesialist'
 function deriveTier(rolle: string): 'IK' | 'Senior' | 'Spesialist' {
-  if (rolle === 'Senior innkjøpskonsulent') return 'Senior'
-  if (rolle === 'Innkjøpsspesialist') return 'Spesialist'
+  const r = rolle.toLowerCase()
+  if (r.includes('spesialist'))       return 'Spesialist'
+  if (r === 'teamleder m leads')      return 'Spesialist'
+  if (r.includes('senior'))           return 'Senior'
   return 'IK'
 }
 

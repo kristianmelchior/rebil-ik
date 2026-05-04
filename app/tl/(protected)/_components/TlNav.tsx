@@ -7,17 +7,18 @@ interface Props {
   isAdmin:     boolean
   displayName: string | null
   teamleders?: string[]
+  ownTl?:      string
 }
 
-export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
+export default function TlNav({ isAdmin, displayName, teamleders, ownTl }: Props) {
   const pathname     = usePathname()
   const router       = useRouter()
   const searchParams = useSearchParams()
-  const selectedTl   = searchParams.get('tl') ?? ''
+  const selectedTl   = searchParams.get('tl') ?? ownTl ?? ''
 
   function handleTlChange(value: string) {
     const params = new URLSearchParams(searchParams.toString())
-    if (value) params.set('tl', value)
+    if (value && value !== '__all__') params.set('tl', value)
     else params.delete('tl')
     router.push(`${pathname}?${params.toString()}`)
   }
@@ -52,13 +53,13 @@ export default function TlNav({ isAdmin, displayName, teamleders }: Props) {
           })}
         </nav>
 
-        {isAdmin && teamleders && teamleders.length > 0 && (
+        {teamleders && teamleders.length > 0 && (
           <select
             value={selectedTl}
             onChange={e => handleTlChange(e.target.value)}
             className="text-xs border border-border rounded px-2 py-1.5 bg-white text-text-primary"
           >
-            <option value="">Alle team</option>
+            <option value="__all__">Alle team</option>
             {teamleders.map(tl => (
               <option key={tl} value={tl}>{tl}</option>
             ))}

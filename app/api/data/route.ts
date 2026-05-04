@@ -98,7 +98,7 @@ export async function GET() {
       const teamReps = await getTeamMembers(sessionRep.full_name)
       return Response.json(
         { ...dashboard, teamView: { reps: teamReps } },
-        { headers: { 'Cache-Control': 'private, max-age=60, stale-while-revalidate=120' } }
+        { headers: { 'Cache-Control': 'no-store' } }
       )
     }
 

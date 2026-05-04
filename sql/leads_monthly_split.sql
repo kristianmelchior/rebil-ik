@@ -20,13 +20,13 @@ RETURNS TABLE(kode text, teamleder text, month text, teller_true bigint, teller_
 LANGUAGE sql STABLE AS $$
   SELECT
     kode::text,
-    teamleder::text,
+    MAX(teamleder)::text,                        -- use current teamleder (avoids multi-row per kode)
     to_char(createdate, 'YYYY-MM') AS month,
     COUNT(*) FILTER (WHERE teller_lead = true)  AS teller_true,
     COUNT(*) FILTER (WHERE teller_lead = false) AS teller_false
   FROM public.leads
   WHERE EXTRACT(YEAR FROM createdate::date) = p_year
-  GROUP BY kode, teamleder, to_char(createdate, 'YYYY-MM')
+  GROUP BY kode, to_char(createdate, 'YYYY-MM')  -- removed teamleder from GROUP BY
 $$;
 
 -- ── Recreate get_leads_range (text params to match JS client) ─────────────────
@@ -35,12 +35,12 @@ RETURNS TABLE(kode text, teamleder text, teller_true bigint, teller_false bigint
 LANGUAGE sql STABLE AS $$
   SELECT
     kode::text,
-    teamleder::text,
+    MAX(teamleder)::text,                        -- use current teamleder
     COUNT(*) FILTER (WHERE teller_lead = true)  AS teller_true,
     COUNT(*) FILTER (WHERE teller_lead = false) AS teller_false
   FROM public.leads
   WHERE createdate::date BETWEEN p_from::date AND p_to::date
-  GROUP BY kode, teamleder
+  GROUP BY kode                                  -- removed teamleder from GROUP BY
 $$;
 
 -- ── Verify (run after the above) ──────────────────────────────────────────────

@@ -32,11 +32,12 @@ export default async function TlProtectedLayout({
   if (!isAdmin && !isTeamleder(rep!.rolle)) redirect('/tl/login')
 
   const displayName = rep?.full_name ?? superEmail
-  const teamleders  = isAdmin ? await getTeamleders().catch(() => []) : []
+  const teamleders  = await getTeamleders().catch(() => [])
+  const ownTl       = rep?.full_name ?? undefined
 
   return (
     <div className="min-h-screen bg-[#F5F5F5]">
-      <TlNav isAdmin={isAdmin} displayName={displayName} teamleders={teamleders} />
+      <TlNav isAdmin={isAdmin} displayName={displayName} teamleders={teamleders} ownTl={ownTl} />
       <main className="max-w-7xl mx-auto px-6 py-8">
         {children}
       </main>

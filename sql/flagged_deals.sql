@@ -35,7 +35,8 @@ LANGUAGE sql STABLE AS $flagged$
   FROM public.deals_current d
   LEFT JOIN public.reps r_owner ON r_owner.hubspot_id = d.hubspot_owner_id
   LEFT JOIN public.reps r_ik    ON r_ik.hubspot_id    = d.owner_id
-  WHERE (
+  WHERE d.create_date < now() - interval '30 minutes'
+  AND (
     d.hubspot_owner_id IS NULL
     OR r_owner.kode IS NULL
     OR (d.hubspot_owner_id IS DISTINCT FROM d.owner_id
