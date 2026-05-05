@@ -24,8 +24,9 @@ export default function TlNav({ isAdmin, displayName, teamleders, ownTl }: Props
   }
 
   const navLinks = [
-    { href: '/tl',             label: 'Oversikt'   },
-    { href: '/tl/tabell',      label: 'Tabell'     },
+    { href: '/tl',             label: 'Oversikt'    },
+    { href: '/tl/tabell',      label: 'Tabell'      },
+    { href: '/tl/leads',       label: 'Leads'       },
     ...(isAdmin ? [{ href: '/tl/admin', label: 'Administrer' }] : []),
   ]
 

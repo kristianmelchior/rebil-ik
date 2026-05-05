@@ -420,6 +420,7 @@ export default function Page() {
           />
           <BonusPanel
             bonus={data.bonus}
+            bonusByMonth={data.bonusByMonth}
             rep={data.rep}
             salesByMonth={data.salesByMonth}
             lastUpdated={data.lastUpdated}

@@ -174,6 +174,7 @@ export interface RepDashboard {
   trend: (PeriodMetrics & { month: string })[]        // 'YYYY-MM', oldest first
   medianTrend: (PeriodMetrics & { month: string })[]
   bonus: BonusResult
+  bonusByMonth: Record<string, BonusResult>           // key = 'YYYY-MM', all months except current
   salesThisMonth: SaleRow[]
   salesLast30Days: SaleRow[]
   medianPrisPctMonth: number | null

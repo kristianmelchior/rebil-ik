@@ -386,6 +386,15 @@ export function buildDashboard(
     salesByMonth[ym].push(sale)
   }
 
+  // Compute bonus for every past month with sales (excludes current month — that uses live `bonus`)
+  const bonusByMonth: Record<string, ReturnType<typeof computeBonus>> = {}
+  for (const ym of Object.keys(salesByMonth)) {
+    if (ym === currentMonthKey) continue
+    const ymLeadCount = repLeadMonthly.filter(r => r.month === ym).reduce((s, r) => s + Number(r.teller_true), 0)
+    const ymNpsRows   = filterByDateRange(repNps, 'submitted_at', `${ym}-01`, `${ym}-31`)
+    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows)
+  }
+
   return {
     rep,
     currentMonth:        computeMetrics(repSalesMonth, repMonthLeadCount, repMonthLeadTotal, repNpsMonth),
@@ -395,6 +404,7 @@ export function buildDashboard(
     trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
     medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
     bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth),
+    bonusByMonth,
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
     salesLast30Days:     repSales30,
     salesByMonth,

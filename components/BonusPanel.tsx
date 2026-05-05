@@ -64,6 +64,7 @@ function lookupNpsBonus(score: number): number {
 
 interface BonusPanelProps {
   bonus:          BonusResult
+  bonusByMonth:   Record<string, BonusResult>
   rep:            Rep
   salesByMonth:   Record<string, SaleRow[]>
   lastUpdated:    string
@@ -71,7 +72,7 @@ interface BonusPanelProps {
 }
 
 export default function BonusPanel({
-  bonus, rep, salesByMonth, lastUpdated, onMonthChange,
+  bonus, bonusByMonth, rep, salesByMonth, lastUpdated, onMonthChange,
 }: BonusPanelProps) {
   const currentMonthKey = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
 
@@ -122,17 +123,18 @@ export default function BonusPanel({
     day: 'numeric', month: 'long', year: 'numeric',
   })
 
-  // For past months: derive baseBonus and car count directly from salesByMonth rows
-  const pastSales       = salesByMonth[selectedMonth] ?? []
-  const pastBaseBonus   = pastSales.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
-  const pastCarsCount   = pastSales.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
+  // For past months: use server-computed BonusResult if available, else derive from sales rows
+  const pastBonus     = !isCurrentMonth ? (bonusByMonth[selectedMonth] ?? null) : null
+  const pastSales     = salesByMonth[selectedMonth] ?? []
+  const pastBaseBonus = pastSales.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
+  const pastCarsCount = pastSales.filter(r => r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
 
-  // Display values — use what-if sim for current month, derived past data for other months
-  const displayBaseBonus          = isCurrentMonth ? simEstimatedBaseBonus : pastBaseBonus
-  const displayCarsCount          = isCurrentMonth ? simEstimatedCars      : pastCarsCount
-  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : 0
-  const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : 0
-  const displayTotal              = isCurrentMonth ? simTotalBonus         : pastBaseBonus
+  // Display values — use what-if sim for current month, server-computed past data for other months
+  const displayBaseBonus          = isCurrentMonth ? simEstimatedBaseBonus : (pastBonus?.baseBonus ?? pastBaseBonus)
+  const displayCarsCount          = isCurrentMonth ? simEstimatedCars      : (pastBonus?.carsThisMonth ?? pastCarsCount)
+  const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : (pastBonus?.konverteringsbonus ?? 0)
+  const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : (pastBonus?.npsBonus ?? 0)
+  const displayTotal              = isCurrentMonth ? simTotalBonus         : (pastBonus?.totalBonus ?? pastBaseBonus)
 
   return (
     <section>
@@ -154,68 +156,78 @@ export default function BonusPanel({
         </select>
       </div>
 
-      {isCurrentMonth && (
-        <>
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Bonus</p>
-          <div className="flex gap-4 mb-4">
-            {/* Estimated cars input */}
-            <div className="bg-surface border border-border rounded-card p-4 flex-1">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Estimert antall biler</p>
-              <input
-                type="number"
-                step={1}
-                min={0}
-                value={simEstimatedCars}
-                onChange={e => {
-                  const v = parseInt(e.target.value, 10)
-                  setSimEstimatedCars(Number.isNaN(v) ? 0 : Math.max(0, v))
-                }}
-                className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none"
-              />
+      <>
+        <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-1.5">Bonus</p>
+        <div className="flex gap-4 mb-4">
+          {/* Cars — editable for current month, locked for past */}
+          <div className="bg-surface border border-border rounded-card p-4 flex-1">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">
+              {isCurrentMonth ? 'Estimert antall biler' : 'Antall biler'}
+            </p>
+            <input
+              type="number"
+              step={1}
+              min={0}
+              value={isCurrentMonth ? simEstimatedCars : displayCarsCount}
+              onChange={e => {
+                if (!isCurrentMonth) return
+                const v = parseInt(e.target.value, 10)
+                setSimEstimatedCars(Number.isNaN(v) ? 0 : Math.max(0, v))
+              }}
+              disabled={!isCurrentMonth}
+              className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none disabled:bg-bg disabled:text-text-muted disabled:cursor-default"
+            />
+            {isCurrentMonth && (
               <p className="text-xs text-text-hint mt-1.5">
                 {bonus.carsThisMonth} solgt så langt
               </p>
-            </div>
-
-            {/* Konvertering what-if input */}
-            <div className="bg-surface border border-border rounded-card p-4 flex-1">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Konvertering</p>
-              <input
-                type="number"
-                step={0.5}
-                min={0.5}
-                max={25}
-                value={simConvRate}
-                onChange={e => {
-                  const v = parseFloat(e.target.value)
-                  setSimConvRate(Number.isNaN(v) ? 0 : roundConvHalfStep(v))
-                }}
-                className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none"
-              />
-              <p className="text-xs text-text-hint mt-1.5">
-                Faktor: {simConvFactor} ({rep.tier})
-              </p>
-            </div>
-
-            {/* NPS what-if input */}
-            <div className="bg-surface border border-border rounded-card p-4 flex-1">
-              <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">NPS</p>
-              <input
-                type="number"
-                step={10}
-                min={-40}
-                max={90}
-                value={simNpsScore}
-                onChange={e => setSimNpsScore(parseInt(e.target.value, 10) || 0)}
-                className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none"
-              />
-              <p className="text-xs text-text-hint mt-1.5">
-                NPS-bonus: {fmtKr(simNpsBonus)}
-              </p>
-            </div>
+            )}
           </div>
-        </>
-      )}
+
+          {/* Konvertering — editable for current month, locked for past */}
+          <div className="bg-surface border border-border rounded-card p-4 flex-1">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Konvertering</p>
+            <input
+              type="number"
+              step={0.5}
+              min={0.5}
+              max={25}
+              value={isCurrentMonth ? simConvRate : Math.round((pastBonus?.convRate ?? 0) * 10) / 10}
+              onChange={e => {
+                if (!isCurrentMonth) return
+                const v = parseFloat(e.target.value)
+                setSimConvRate(Number.isNaN(v) ? 0 : roundConvHalfStep(v))
+              }}
+              disabled={!isCurrentMonth}
+              className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none disabled:bg-bg disabled:text-text-muted disabled:cursor-default"
+            />
+            <p className="text-xs text-text-hint mt-1.5">
+              Faktor: {isCurrentMonth ? simConvFactor : (pastBonus?.convFactor ?? 1)} ({rep.tier})
+            </p>
+          </div>
+
+          {/* NPS — editable for current month, locked for past */}
+          <div className="bg-surface border border-border rounded-card p-4 flex-1">
+            <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">NPS</p>
+            <input
+              type="number"
+              step={10}
+              min={-40}
+              max={90}
+              value={isCurrentMonth ? simNpsScore : (pastBonus?.npsScore ?? 0)}
+              onChange={e => {
+                if (!isCurrentMonth) return
+                setSimNpsScore(parseInt(e.target.value, 10) || 0)
+              }}
+              disabled={!isCurrentMonth}
+              className="border border-border rounded-lg px-3 py-2 text-base font-medium text-text-primary w-full focus:border-[var(--rebil-red)] outline-none disabled:bg-bg disabled:text-text-muted disabled:cursor-default"
+            />
+            <p className="text-xs text-text-hint mt-1.5">
+              NPS-bonus: {fmtKr(isCurrentMonth ? simNpsBonus : (pastBonus?.npsBonus ?? 0))}
+            </p>
+          </div>
+        </div>
+      </>
 
       {/* Bonus breakdown card */}
       <div className="bg-surface border border-border rounded-card p-5">
