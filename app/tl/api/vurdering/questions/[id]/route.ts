@@ -52,22 +52,26 @@ export async function PUT(
 
   // Replace options if provided
   if (body.options !== undefined) {
-    // Delete options that are no longer in the list (by id).
-    // Options WITHOUT an id are new and will be inserted below.
+    // Options WITH an id are existing (kept); options WITHOUT an id are new.
     const keptIds = body.options.map(o => o.id).filter(Boolean) as string[]
-    if (keptIds.length > 0) {
+
+    // Fetch all current option IDs for this question, then delete only the
+    // ones no longer in the incoming list. Using .in() is reliable; the
+    // alternative .not('id','in','(uuid,...)')  is not for UUID arrays in
+    // Supabase JS v2.
+    const { data: currentOpts } = await supabase
+      .from('rating_options')
+      .select('id')
+      .eq('question_id', id)
+
+    const allCurrentIds = (currentOpts ?? []).map((r: { id: string }) => r.id)
+    const toDelete = allCurrentIds.filter(oid => !keptIds.includes(oid))
+
+    if (toDelete.length > 0) {
       const { error: delErr } = await supabase
         .from('rating_options')
         .delete()
-        .eq('question_id', id)
-        .not('id', 'in', `(${keptIds.join(',')})`)
-      if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
-    } else {
-      // No existing options kept — delete all
-      const { error: delErr } = await supabase
-        .from('rating_options')
-        .delete()
-        .eq('question_id', id)
+        .in('id', toDelete)
       if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
     }
 
