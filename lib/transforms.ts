@@ -342,7 +342,7 @@ export function buildDashboard(
   kontakttidMonthly: KontakttidAgg[],
   kontakttidAvgMonthly: KontakttidAvgAgg[],
   kontakttidRange30: KontakttidRangeAgg[]
-): RepDashboard {
+): Omit<RepDashboard, 'leadsHandledKategoriTrend'> {
   const today = new Date()
   const year  = today.getFullYear()
   const month = today.getMonth() + 1 // 1-based
