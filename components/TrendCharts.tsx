@@ -6,11 +6,11 @@
 
 import { useState, useEffect } from 'react'
 import {
-  ComposedChart, Bar, Line, XAxis, YAxis,
+  ComposedChart, Bar, Cell, Line, XAxis, YAxis,
   CartesianGrid, ResponsiveContainer, Tooltip,
   LabelList,
 } from 'recharts'
-import type { PeriodMetrics, PrisDistPoint, FordDistPoint, KonvPlattformPoint, KontakttidPoint } from '@/lib/types'
+import type { PeriodMetrics, PrisDistPoint, FordDistPoint, KonvPlattformPoint, KontakttidPoint, LeadsHandledKategoriPoint } from '@/lib/types'
 import type { TrendMetric } from '@/lib/formatDisplay'
 import { fmtTrendMetric } from '@/lib/formatDisplay'
 import { workdaysInMonth, elapsedWorkdaysInMonth } from '@/lib/workdays'
@@ -41,6 +41,18 @@ const PRIS_COLORS  = { pris: BRAND_RED, rabatt1: '#777', rabatt2: '#aaa', minste
 const FORD_COLORS  = { fastpris: BRAND_RED, kommisjon: '#777', salgshjelp: '#aaa' }
 const GREY         = '#999'
 const STROKE_COLOR = '#111'
+// Fixed order + base colors for leads_kategori bars
+const KATEGORI_ORDER = ['Teller', 'Duplikat', 'Helgevakt', 'Annet']
+const KATEGORI_BASE_COLOR: Record<string, string> = {
+  Teller:    BRAND_RED,
+  Duplikat:  '#999',
+  Helgevakt: '#555',
+  Annet:     '#555',
+}
+const DUPLIKAT_FROM_MONTH = '2026-05'  // red from this month onwards
+const KATEGORI_LABEL: Record<string, string> = {
+  Annet: 'Annet, teller ikke',
+}
 
 // ─── Tooltip for standard chart ───────────────────────────────────────────────
 function StandardTooltip({
@@ -67,31 +79,37 @@ function StandardTooltip({
   )
 }
 
-// ─── Tooltip for stacked leads chart ─────────────────────────────────────────
+// ─── Tooltip for stacked leads-håndtert chart ────────────────────────────────
 function LeadsTooltip({
-  active, payload, label,
+  active, payload, label, categories,
 }: {
   active?: boolean
-  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown }>
+  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown; fill?: string }>
   label?: unknown
+  categories: string[]
 }) {
   if (!active || !payload?.length || label == null) return null
   const ym = String(label)
   const monthName = MONTH_ABBR[parseInt(ym.slice(5, 7), 10) - 1]
-  const trueRaw  = payload.find(p => p.dataKey === 'leadsTrue')?.value
-  const falseRaw = payload.find(p => p.dataKey === 'leadsFalse')?.value
-  const medRaw   = payload.find(p => p.dataKey === 'medianTotal')?.value
-  const trueVal  = typeof trueRaw  === 'number' ? trueRaw  : NaN
-  const falseVal = typeof falseRaw === 'number' ? falseRaw : NaN
-  const medVal   = typeof medRaw   === 'number' ? medRaw   : NaN
-  const total = !Number.isNaN(trueVal) && !Number.isNaN(falseVal) ? trueVal + falseVal : NaN
+  const total = categories.reduce((s, cat) => {
+    const v = payload.find(p => p.dataKey === cat)?.value
+    return s + (typeof v === 'number' ? v : 0)
+  }, 0)
   return (
     <div className="bg-surface border border-border rounded-lg px-3 py-2 text-xs shadow-sm">
       <p className="font-medium text-text-primary mb-1">{monthName}</p>
-      <p className="text-text-secondary">Totalt: {!Number.isNaN(total) ? total : '—'}</p>
-      <p className="text-text-secondary">Teller: {!Number.isNaN(trueVal) ? trueVal : '—'}</p>
-      <p className="text-text-secondary">Helgevakt, teller ikke: {!Number.isNaN(falseVal) ? falseVal : '—'}</p>
-      <p className="text-text-secondary">Median totalt: {!Number.isNaN(medVal) ? Math.round(medVal) : '—'}</p>
+      <p className="text-text-secondary font-medium mb-1">Totalt: {total}</p>
+      {[...categories].reverse().map(cat => {
+        const entry = payload.find(p => p.dataKey === cat)
+        const v = typeof entry?.value === 'number' ? entry.value : 0
+        if (v === 0) return null
+        return (
+          <div key={cat} className="flex items-center gap-1.5">
+            <span className="inline-block w-2 h-2 rounded-sm shrink-0" style={{ backgroundColor: entry?.fill as string }} />
+            <span className="text-text-secondary">{KATEGORI_LABEL[cat] ?? cat}: {v}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -186,20 +204,21 @@ function SplitProgressBar({ value, target }: { value: number; target: number }) 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 interface TrendChartsProps {
-  trend?:                (PeriodMetrics & { month: string })[]
-  medianTrend?:          (PeriodMetrics & { month: string })[]
-  prisDistTrend?:        PrisDistPoint[]
-  fordDistTrend?:        FordDistPoint[]
-  konvPlattformTrend?:   KonvPlattformPoint[]
-  kontakttidTrend?:      KontakttidPoint[]
-  currentMonthMetrics?:  PeriodMetrics
-  last30Metrics?:        PeriodMetrics
-  repKode?:              string
+  trend?:                        (PeriodMetrics & { month: string })[]
+  medianTrend?:                  (PeriodMetrics & { month: string })[]
+  prisDistTrend?:                PrisDistPoint[]
+  fordDistTrend?:                FordDistPoint[]
+  konvPlattformTrend?:           KonvPlattformPoint[]
+  kontakttidTrend?:              KontakttidPoint[]
+  leadsHandledKategoriTrend?:    LeadsHandledKategoriPoint[]
+  currentMonthMetrics?:          PeriodMetrics
+  last30Metrics?:                PeriodMetrics
+  repKode?:                      string
 }
 
 export default function TrendCharts({
   trend = [], medianTrend = [], prisDistTrend = [], fordDistTrend = [],
-  konvPlattformTrend = [], kontakttidTrend = [],
+  konvPlattformTrend = [], kontakttidTrend = [], leadsHandledKategoriTrend = [],
   currentMonthMetrics, last30Metrics, repKode,
 }: TrendChartsProps) {
   const [metric, setMetric] = useState<ExtMetric>('npsScore')
@@ -234,16 +253,28 @@ export default function TrendCharts({
   const currentMonthKey = new Date().toISOString().slice(0, 7)
   const isDistMetric = metric === 'prisDist' || metric === 'fordDist'
 
-  // ── Stacked leads chart data ──
-  const leadsData = metric !== 'leads' ? [] : trend.map((point, i) => {
-    const isFuture = point.month > currentMonthKey
-    return {
-      month:       point.month,
-      leadsTrue:   isFuture ? null : point.leads,
-      leadsFalse:  isFuture ? null : Math.max(0, point.leadsTotal - point.leads),
-      medianTotal: isFuture ? null : (medianTrend[i]?.leadsTotal ?? 0),
-    }
-  })
+  // ── Stacked leads-håndtert chart data (by kategori) ──
+  // Use fixed order; unknown categories appended alphabetically after
+  const leadsKategoriCategories = metric !== 'leads' ? [] : (() => {
+    const all = new Set(leadsHandledKategoriTrend.flatMap(pt => Object.keys(pt.categories)))
+    const known   = KATEGORI_ORDER.filter(k => all.has(k))
+    const unknown = [...all].filter(k => !KATEGORI_ORDER.includes(k)).sort()
+    return [...known, ...unknown]
+  })()
+
+  // Build a full 12-month grid so all months appear on x-axis
+  const leadsData = metric !== 'leads' ? [] : (() => {
+    const dataMap = new Map(leadsHandledKategoriTrend.map(pt => [pt.month, pt]))
+    return trend.map(point => {
+      const isFuture = point.month > currentMonthKey
+      const pt = dataMap.get(point.month)
+      const row: Record<string, string | number | null> = { month: point.month }
+      for (const cat of leadsKategoriCategories) {
+        row[cat] = isFuture ? null : (pt?.categories[cat] ?? 0)
+      }
+      return row
+    })
+  })()
 
   // ── Konv plattform chart data ──
   const konvPlattformData = metric !== 'konvPlattform' ? [] : konvPlattformTrend.map(point => {
@@ -385,7 +416,7 @@ export default function TrendCharts({
                   : `${pillBase} flex-1 bg-transparent text-text-muted hover:text-text-primary`
               }
             >
-              Leadstildeling
+              Leadshåndtering
             </button>
           </div>
         </div>
@@ -484,7 +515,7 @@ export default function TrendCharts({
         )}
         <ResponsiveContainer width="100%" height={260}>
 
-          {/* ── Stacked leads chart ── */}
+          {/* ── Stacked leads-håndtert chart (by kategori) ── */}
           {metric === 'leads' ? (
             <ComposedChart data={leadsData} margin={{ top: 28, right: 8, bottom: 0, left: 4 }}>
               <CartesianGrid vertical={false} stroke="#F0F0F0" />
@@ -492,20 +523,40 @@ export default function TrendCharts({
               <YAxis {...yAxisProps} />
               <Tooltip
                 content={({ active, payload, label }) => (
-                  <LeadsTooltip active={active} payload={payload} label={label} />
+                  <LeadsTooltip active={active} payload={payload} label={label} categories={leadsKategoriCategories} />
                 )}
               />
-              <Bar dataKey="leadsTrue" stackId="ls" fill={BRAND_RED}>
-                <LabelList
-                  position="insideTop"
-                  fill="#ffffff"
-                  fontSize={11}
-                  fontWeight={600}
-                  formatter={(v: unknown) => typeof v === 'number' && v > 0 ? String(v) : ''}
-                />
-              </Bar>
-              <Bar dataKey="leadsFalse" stackId="ls" fill="#CCCCCC" radius={[3, 3, 0, 0]} />
-              <Line dataKey="medianTotal" stroke="#111111" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
+              {leadsKategoriCategories.map((cat, idx) => {
+                const baseColor = KATEGORI_BASE_COLOR[cat] ?? '#999'
+                const isLast = idx === leadsKategoriCategories.length - 1
+                return (
+                  <Bar
+                    key={cat}
+                    dataKey={cat}
+                    stackId="lk"
+                    fill={baseColor}
+                    radius={isLast ? [3, 3, 0, 0] : undefined}
+                  >
+                    {/* Duplikat: grey before DUPLIKAT_FROM_MONTH, red from that month onwards */}
+                    {cat === 'Duplikat' && leadsData.map((entry, i) => (
+                      <Cell
+                        key={`cell-${i}`}
+                        fill={String(entry.month) >= DUPLIKAT_FROM_MONTH ? BRAND_RED : '#999'}
+                      />
+                    ))}
+                    {/* Label on bottom bar (Teller) */}
+                    {cat === 'Teller' && (
+                      <LabelList
+                        position="insideTop"
+                        fill="#ffffff"
+                        fontSize={11}
+                        fontWeight={600}
+                        formatter={(v: unknown) => typeof v === 'number' && v > 0 ? String(v) : ''}
+                      />
+                    )}
+                  </Bar>
+                )
+              })}
             </ComposedChart>
 
           /* ── Pris distribution chart ── */
@@ -678,7 +729,6 @@ export default function TrendCharts({
                   }}
                 />
               </Bar>
-              <Line dataKey="median" stroke="#111111" strokeWidth={1.5} strokeDasharray="4 3" dot={false} />
             </ComposedChart>
           )}
         </ResponsiveContainer>
@@ -726,29 +776,24 @@ export default function TrendCharts({
             </div>
           </div>
         ) : metric === 'leads' ? (
-          <div className="flex justify-end gap-5 mt-3">
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: BRAND_RED }} />
-              <span className="text-xs text-text-secondary">Teller</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: '#CCCCCC' }} />
-              <span className="text-xs text-text-secondary">Helgevakt, teller ikke</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-0.5 bg-text-primary" />
-              <span className="text-xs text-text-secondary">Median</span>
-            </div>
+          <div className="flex justify-end flex-wrap gap-4 mt-3">
+            {leadsKategoriCategories.map(cat => {
+              const color = cat === 'Duplikat'
+                ? (currentMonthKey >= DUPLIKAT_FROM_MONTH ? BRAND_RED : '#999')
+                : (KATEGORI_BASE_COLOR[cat] ?? '#999')
+              return (
+                <div key={cat} className="flex items-center gap-1.5">
+                  <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: color }} />
+                  <span className="text-xs text-text-secondary">{KATEGORI_LABEL[cat] ?? cat}</span>
+                </div>
+              )
+            })}
           </div>
         ) : (
           <div className="flex justify-end gap-5 mt-3">
             <div className="flex items-center gap-1.5">
               <span className="inline-block w-3.5 h-3.5 rounded-sm" style={{ backgroundColor: BRAND_RED }} />
               <span className="text-xs text-text-secondary">Deg</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-5 h-0.5 bg-text-primary" />
-              <span className="text-xs text-text-secondary">Median</span>
             </div>
           </div>
         )}

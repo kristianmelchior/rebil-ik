@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint } from './types'
+import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint, KontakttidRangeAgg } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -340,7 +340,8 @@ export function buildDashboard(
   konvPlattformMonthly: KonvPlattformAgg[],
   konvPlattformRange30: KonvPlattformRangeAgg[],
   kontakttidMonthly: KontakttidAgg[],
-  kontakttidAvgMonthly: KontakttidAvgAgg[]
+  kontakttidAvgMonthly: KontakttidAvgAgg[],
+  kontakttidRange30: KontakttidRangeAgg[]
 ): RepDashboard {
   const today = new Date()
   const year  = today.getFullYear()
@@ -418,7 +419,14 @@ export function buildDashboard(
       const currentPt  = kontakttidTrend.find(p => p.month === currentMonthKey)
       const firstCat   = Object.keys(currentPt?.shares ?? {}).sort()[0]
       const currentMonthSameDagPct = firstCat != null ? (currentPt?.shares[firstCat] ?? null) : null
-      return { kontakttidTrend, currentMonthSameDagPct }
+
+      const repRange30 = kontakttidRange30.filter(r => r.kode === rep.kode)
+      const range30Total = repRange30.reduce((s, r) => s + Number(r.lead_count), 0)
+      const firstCat30 = repRange30.map(r => r.kontakttid_kategori).sort()[0]
+      const sameDagCount30 = repRange30.find(r => r.kontakttid_kategori === firstCat30)?.lead_count ?? 0
+      const last30SameDagPct = range30Total > 0 ? Number(sameDagCount30) / range30Total : null
+
+      return { kontakttidTrend, currentMonthSameDagPct, last30SameDagPct }
     })(),
     currentMonthKonvPlattform: (() => {
       const repPlatformMonth = konvPlattformMonthly.filter(r => r.kode === rep.kode && r.month === currentMonthKey)

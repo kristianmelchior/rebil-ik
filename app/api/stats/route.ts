@@ -2,7 +2,7 @@
 // Admin and teamleder only — returns per-rep metrics for all reps with a defined kode.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKonvPerKontakttid } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKonvPerKontakttid, getLeadsHandledRange } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
@@ -25,6 +25,7 @@ export interface RepStatsEntry {
   teamlederInitials: string
   bilerKjopt: number
   leads: number
+  leadsHandtert: number
   konvertering: number | null
   npsScore: number | null
   fullprisPct: number | null
@@ -83,6 +84,7 @@ function buildMetrics(
   reps: { kode: string; full_name: string; teamleder: string }[],
   konvPlattformAgg: KonvPlattformRangeAgg[],
   kontakttidAgg: KontakttidRangeAgg[],
+  leadsHandledByName: Map<string, number>,
 ): RepStatsEntry[] {
   const periodSales = sales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
   const periodNps   = nps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
@@ -155,6 +157,8 @@ function buildMetrics(
     const sameDagPct = leadsCount === 0 ? null : sameDagCount / leadsCount
     const kontakttidBreakdown: Record<string, number> = catMap ? Object.fromEntries(catMap.entries()) : {}
 
+    const leadsHandtert = leadsHandledByName.get(rep.full_name) ?? 0
+
     return {
       kode: k,
       rep_name: rep.full_name,
@@ -162,6 +166,7 @@ function buildMetrics(
       teamlederInitials: initials(rep.teamleder),
       bilerKjopt,
       leads: leadsCount,
+      leadsHandtert,
       konvertering,
       npsScore,
       fullprisPct,
@@ -193,18 +198,22 @@ export async function GET(request: Request) {
   const { from, to } = dateRange(mode, period)
 
   try {
-    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid] = await Promise.all([
+    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid, leadsHandledAgg] = await Promise.all([
       getAllRepsWithDetails(),
       fetchYears(from, to),
       getLeadsRange(from, to),
       getKonvPlattformRange(from, to).catch((e) => { console.error('[stats] konvPlattformRange:', e); return [] as KonvPlattformRangeAgg[] }),
       getKontakttidRange(from, to).catch((e) => { console.error('[stats] kontakttidRange:', e); return [] as KontakttidRangeAgg[] }),
       getKonvPerKontakttid(from, to).catch((e) => { console.error('[stats] konvPerKontakttid:', e); return [] as KonvPerKontakttidRow[] }),
+      getLeadsHandledRange(from, to).catch(() => [] as { dealeier_ik: string; count: number }[]),
     ])
+
+    const leadsHandledByName = new Map<string, number>()
+    for (const r of leadsHandledAgg) leadsHandledByName.set(r.dealeier_ik, r.count)
 
     // Only include reps with a non-empty kode (skip zz_unknown etc.)
     const activeReps = reps.filter(r => !skipKode(r.kode))
-    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg)
+    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg, leadsHandledByName)
 
     return Response.json({ rows, konvPerKontakttid, from, to } satisfies StatsData, {
       headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' },

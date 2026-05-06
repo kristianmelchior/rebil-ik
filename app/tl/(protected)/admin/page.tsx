@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { TEAMLEDER_ROLES } from '@/lib/auth'
 import type { RepAdmin } from '@/lib/tl/admin-db'
 import RottenRulesSection from './_components/RottenRulesSection'
+import VurderingQuestionsAdmin from './_components/VurderingQuestionsAdmin'
 
 const TL_ROLES = TEAMLEDER_ROLES as readonly string[]
 
@@ -104,6 +105,10 @@ export default function TlAdminPage() {
 
       <div className="border-t border-border pt-8">
         <RottenRulesSection />
+      </div>
+
+      <div className="border-t border-border pt-8">
+        <VurderingQuestionsAdmin />
       </div>
     </div>
   )

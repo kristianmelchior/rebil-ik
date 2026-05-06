@@ -16,6 +16,7 @@ import FeedTab from '@/components/FeedTab'
 import NpsTab from '@/components/NpsTab'
 import ToplistTab from '@/components/ToplistTab'
 import StatsTab from '@/components/StatsTab'
+import RatingPreviewPopup from '@/components/RatingPreviewPopup'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
 
@@ -403,9 +404,11 @@ export default function Page() {
             salesThisMonth={data.salesThisMonth}
             salesLast30Days={data.salesLast30Days}
             leads={metrics.leads}
+            leadsTotal={metrics.leadsTotal}
             currentMonthKonvPlattform={data.currentMonthKonvPlattform}
             last30KonvPlattform={data.last30KonvPlattform}
             currentMonthSameDagPct={data.currentMonthSameDagPct}
+            last30SameDagPct={data.last30SameDagPct}
           />
           <TrendCharts
             trend={data.trend}
@@ -414,6 +417,7 @@ export default function Page() {
             fordDistTrend={data.fordDistTrend}
             konvPlattformTrend={data.konvPlattformTrend}
             kontakttidTrend={data.kontakttidTrend}
+            leadsHandledKategoriTrend={data.leadsHandledKategoriTrend ?? []}
             currentMonthMetrics={data.currentMonth}
             last30Metrics={data.last30Days}
             repKode={data.rep.kode}
@@ -448,6 +452,13 @@ export default function Page() {
           <StatsTab defaultTlFilter={data.teamView ? data.rep.full_name : undefined} />
         </main>
       )}
+
+      {/* Weekly TL rating popup — test phase: Benjamin Parr only (admins can preview any rep) */}
+      <RatingPreviewPopup
+        repName={data.rep.full_name}
+        repKode={data.rep.kode}
+        isAdmin={!!data.admin}
+      />
     </div>
   )
 }

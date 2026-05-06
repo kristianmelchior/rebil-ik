@@ -63,7 +63,8 @@ const COLS: ColDef[] = [
   { key: 'npsScore',          label: 'NPS',            fmt: r => fmtNps(r.npsScore),              primary: true  },
   { key: 'konvPlattformRate', label: 'Konv plt.',      fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
   { key: 'sameDagPct',        label: 'Kontakttid',     fmt: r => fmtPct(r.sameDagPct),            primary: false },
-  { key: 'leads',             label: 'Leads',          fmt: r => fmt(r.leads),                    primary: false },
+  { key: 'leads',             label: 'Leads teller',   fmt: r => fmt(r.leads),                    primary: false },
+  { key: 'leadsHandtert',    label: 'Leads håndtert', fmt: r => fmt(r.leadsHandtert),             primary: false },
   { key: 'fastprisPct',       label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
 ]
 
@@ -109,8 +110,9 @@ function sortRows(rows: RepStatsEntry[], key: SortKey, dir: 'asc' | 'desc'): Rep
 // ─── Totals row ───────────────────────────────────────────────────────────────
 
 function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
-  const totalBiler  = rows.reduce((s, r) => s + r.bilerKjopt, 0)
-  const totalLeads  = rows.reduce((s, r) => s + r.leads, 0)
+  const totalBiler        = rows.reduce((s, r) => s + r.bilerKjopt, 0)
+  const totalLeads        = rows.reduce((s, r) => s + r.leads, 0)
+  const totalLeadsHandtert = rows.reduce((s, r) => s + r.leadsHandtert, 0)
 
   const konvRows    = rows.filter(r => r.konvertering      !== null)
   const npsRows     = rows.filter(r => r.npsScore          !== null)
@@ -126,6 +128,7 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     teamlederInitials: '',
     bilerKjopt:        totalBiler,
     leads:             totalLeads,
+    leadsHandtert:     totalLeadsHandtert,
     konvertering:      konvRows.length === 0 ? null : konvRows.reduce((s, r) => s + r.konvertering!,      0) / konvRows.length,
     npsScore:          npsRows.length  === 0 ? null : npsRows.reduce((s, r)  => s + r.npsScore!,          0) / npsRows.length,
     fullprisPct:       prisRows.length === 0 ? null : prisRows.reduce((s, r) => s + r.fullprisPct!,       0) / prisRows.length,
@@ -244,9 +247,9 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border">
-              {/* Name — sortable */}
+              {/* Name — sortable, sticky */}
               <th
-                className="px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-text-primary"
+                className="sticky left-0 z-10 bg-surface px-4 py-3 text-left text-xs font-medium text-text-muted uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-text-primary after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border"
                 onClick={() => handleSort('rep_name')}
               >
                 Selger <SortIcon active={sortKey === 'rep_name'} dir={sortDir} />
@@ -268,21 +271,21 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className={`border-b border-border last:border-0 ${i % 2 !== 0 ? 'bg-bg' : ''}`}>
-                  <td className="px-4 py-3"><div className="h-4 w-36 bg-border rounded animate-pulse" /></td>
+                  <td className={`sticky left-0 z-10 px-4 py-3 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border ${i % 2 !== 0 ? 'bg-bg' : 'bg-surface'}`}><div className="h-4 w-36 bg-border rounded animate-pulse" /></td>
                   {COLS.map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 w-10 bg-border rounded animate-pulse ml-auto" /></td>
                   ))}
                 </tr>
               ))
             ) : filteredRows.length === 0 ? (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-text-muted text-sm">Ingen data</td></tr>
+              <tr><td colSpan={10} className="px-4 py-12 text-center text-text-muted text-sm">Ingen data</td></tr>
             ) : (
               filteredRows.map((row, i) => (
                 <tr
                   key={row.kode}
                   className={`border-b border-border last:border-0 hover:bg-bg transition-colors ${i % 2 !== 0 ? 'bg-bg' : ''}`}
                 >
-                  <td className="px-4 py-3 whitespace-nowrap">
+                  <td className={`sticky left-0 z-10 px-4 py-3 whitespace-nowrap after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border ${i % 2 !== 0 ? 'bg-bg' : 'bg-surface'}`}>
                     <span className="font-medium text-text-primary">{row.rep_name}</span>
                     {row.teamlederInitials && (
                       <span className="ml-2 text-[11px] font-medium text-text-muted bg-bg border border-border rounded px-1.5 py-0.5">
@@ -310,7 +313,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
           {!loading && filteredRows.length > 0 && (
             <tfoot>
               <tr className="border-t-2 border-border bg-bg">
-                <td className="px-4 py-3 text-sm font-semibold text-text-primary">Total</td>
+                <td className="sticky left-0 z-10 bg-bg px-4 py-3 text-sm font-semibold text-text-primary after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border">Total</td>
                 {COLS.map(col => (
                   <td
                     key={col.key as string}

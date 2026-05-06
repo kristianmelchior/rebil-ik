@@ -183,8 +183,10 @@ export interface RepDashboard {
   prisDistTrend: PrisDistPoint[]
   fordDistTrend: FordDistPoint[]
   konvPlattformTrend: KonvPlattformPoint[]
-  kontakttidTrend: KontakttidPoint[]
+  kontakttidTrend:             KontakttidPoint[]
+  leadsHandledKategoriTrend:  LeadsHandledKategoriPoint[]
   currentMonthSameDagPct: number | null   // share of first alphabetical kontakttid category
+  last30SameDagPct:       number | null
   currentMonthKonvPlattform: { rate: number | null; count: number }
   last30KonvPlattform:       { rate: number | null; count: number }
   lastUpdated: string
@@ -232,3 +234,17 @@ export interface FeedCommentPublic {
 }
 
 export type FeedCommentsMap = Record<string, FeedCommentPublic[]>
+
+// Leads håndtert per month, broken down by leads_kategori — for IK-dash trend chart
+export interface LeadsHandledKategoriAgg {
+  month:          string   // 'YYYY-MM'
+  leads_kategori: string
+  count:          number
+}
+
+// Processed: one entry per month with category breakdown
+export interface LeadsHandledKategoriPoint {
+  month:      string
+  categories: Record<string, number>  // leads_kategori → count
+  total:      number
+}

@@ -480,6 +480,31 @@ export const getKonvPerKontakttid = unstable_cache(
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
+// Leads håndtert: count of leads where dealeier_ik = person's name, for a date range.
+// Uses RPC to do GROUP BY in the database — avoids Supabase's 1000-row client limit.
+// Input: from/to (YYYY-MM-DD strings)  Output: { dealeier_ik: string; count: number }[]
+export const getLeadsHandledRange = unstable_cache(
+  async (from: string, to: string): Promise<{ dealeier_ik: string; count: number }[]> => {
+    const { data, error } = await supabase.rpc('get_leads_handled_range', { p_from: from, p_to: to })
+    if (error) throw error
+    return (data ?? []) as { dealeier_ik: string; count: number }[]
+  },
+  ['leads-handled-range'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
+// Leads håndtert per month + leads_kategori for one rep (IK-dash trend chart).
+// Input: name (dealeier_ik), year  Output: { month, leads_kategori, count }[]
+export const getLeadsHandledMonthlyByKategori = unstable_cache(
+  async (name: string, year: number): Promise<{ month: string; leads_kategori: string; count: number }[]> => {
+    const { data, error } = await supabase.rpc('get_leads_handled_monthly_by_kategori', { p_name: name, p_year: year })
+    if (error) throw error
+    return (data ?? []) as { month: string; leads_kategori: string; count: number }[]
+  },
+  ['leads-handled-monthly-by-kategori'],
+  { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
+)
+
 // Lead tildeling: per-person counts of leads received (tildelt) and lost (mistet)
 // for an arbitrary date range, based on rep_name vs dealowner_assigned_to.
 export async function getLeadTildeling(from: string, to: string): Promise<{ name: string; teamleder: string; tildelt: number; mistet: number }[]> {

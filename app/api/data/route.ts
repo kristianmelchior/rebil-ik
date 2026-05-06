@@ -11,9 +11,12 @@ import {
   getKonvPlattformRange,
   getKontakttidMonthly,
   getKontakttidAvgMonthly,
+  getKontakttidRange,
   getAllRepsForPicker,
   getTeamMembers,
+  getLeadsHandledMonthlyByKategori,
 } from '@/lib/db'
+import type { LeadsHandledKategoriPoint } from '@/lib/types'
 import { buildDashboard } from '@/lib/transforms'
 import {
   SESSION_COOKIE_NAME,
@@ -77,19 +80,37 @@ export async function GET() {
     ])
 
     // Graceful fallback — returns empty arrays until SQL functions are deployed
-    const [konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly] = await Promise.all([
+    const [konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, leadsHandledKategoriRaw] = await Promise.all([
       getKonvPlattformMonthly(year).catch(() => []),
       getKonvPlattformRange(last30Start, todayStr).catch(() => []),
       getKontakttidMonthly(year).catch(() => []),
       getKontakttidAvgMonthly(year).catch(() => []),
+      getKontakttidRange(last30Start, todayStr).catch(() => []),
+      getLeadsHandledMonthlyByKategori(rep.full_name, year).catch(() => []),
     ])
 
-    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly)
+    // Process leads-handled-by-kategori into per-month points
+    const leadsHandledKategoriMap = new Map<string, Record<string, number>>()
+    for (const row of leadsHandledKategoriRaw) {
+      if (!leadsHandledKategoriMap.has(row.month)) leadsHandledKategoriMap.set(row.month, {})
+      leadsHandledKategoriMap.get(row.month)![row.leads_kategori] = Number(row.count)
+    }
+    const leadsHandledKategoriTrend: LeadsHandledKategoriPoint[] = Array.from(leadsHandledKategoriMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, categories]) => ({
+        month,
+        categories,
+        total: Object.values(categories).reduce((s, v) => s + v, 0),
+      }))
+
+    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30)
+
+    const dashboardWithKategori = { ...dashboard, leadsHandledKategoriTrend }
 
     if (isAdmin) {
       const reps = await getAllRepsForPicker()
       return Response.json(
-        { ...dashboard, admin: { reps } },
+        { ...dashboardWithKategori, admin: { reps } },
         { headers: { 'Cache-Control': 'no-store' } }
       )
     }
@@ -97,12 +118,12 @@ export async function GET() {
     if (repIsTeamleder) {
       const teamReps = await getTeamMembers(sessionRep.full_name)
       return Response.json(
-        { ...dashboard, teamView: { reps: teamReps } },
+        { ...dashboardWithKategori, teamView: { reps: teamReps } },
         { headers: { 'Cache-Control': 'no-store' } }
       )
     }
 
-    return Response.json(dashboard, {
+    return Response.json(dashboardWithKategori, {
       headers: { 'Cache-Control': 'no-store' },
     })
   } catch {

@@ -14,15 +14,17 @@ interface InsightTilesProps {
   salesThisMonth:  SaleRow[]
   salesLast30Days: SaleRow[]
   leads:           number
+  leadsTotal?:     number
   currentMonthKonvPlattform?: { rate: number | null; count: number }
   last30KonvPlattform?:       { rate: number | null; count: number }
   currentMonthSameDagPct?:    number | null
+  last30SameDagPct?:          number | null
 }
 
 export default function InsightTiles({
-  period, salesThisMonth, salesLast30Days, leads,
+  period, salesThisMonth, salesLast30Days, leads, leadsTotal,
   currentMonthKonvPlattform, last30KonvPlattform,
-  currentMonthSameDagPct,
+  currentMonthSameDagPct, last30SameDagPct,
 }: InsightTilesProps) {
   const sales         = period === 'month' ? salesThisMonth : salesLast30Days
   const fordSlices    = buildFordSlices(sales)
@@ -38,6 +40,9 @@ export default function InsightTiles({
         <div className="bg-surface border border-border rounded-card p-5 text-center">
           <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Leads</p>
           <p className="text-kpi font-medium text-text-muted leading-tight">{fmtKjoptLeads(leads)}</p>
+          {leadsTotal != null && leadsTotal > leads && (
+            <p className="text-xs text-text-muted mt-1">{leadsTotal} håndterte</p>
+          )}
         </div>
 
         {/* 2. Andel Fastpris */}
@@ -58,15 +63,20 @@ export default function InsightTiles({
         </div>
 
         {/* 4. Kontakttid */}
-        <div className="bg-surface border border-border rounded-card p-5 text-center">
-          <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Kontakttid</p>
-          <p className="text-kpi font-medium text-text-primary leading-tight">
-            {currentMonthSameDagPct != null ? `${Math.round(currentMonthSameDagPct * 100)}%` : '—'}
-          </p>
-          {currentMonthSameDagPct != null && (
-            <p className="text-xs text-text-muted mt-1">Kontaktet samme dag</p>
-          )}
-        </div>
+        {(() => {
+          const pct = period === 'month' ? currentMonthSameDagPct : last30SameDagPct
+          return (
+            <div className="bg-surface border border-border rounded-card p-5 text-center">
+              <p className="text-xs font-medium text-text-muted uppercase tracking-wider mb-2">Kontakttid</p>
+              <p className="text-kpi font-medium text-text-primary leading-tight">
+                {pct != null ? `${Math.round(pct * 100)}%` : '—'}
+              </p>
+              {pct != null && (
+                <p className="text-xs text-text-muted mt-1">Kontaktet samme dag</p>
+              )}
+            </div>
+          )
+        })()}
 
       </div>
     </section>
