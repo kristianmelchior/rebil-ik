@@ -245,13 +245,10 @@ function RateTab({
                     const isSaving = saving.has(key)
                     return (
                       <td key={q.id} className="px-4 py-3 align-top">
-                        {/* Segmented control — all options joined on one line */}
-                        <div className="inline-flex rounded-full border border-[#e5e7eb] overflow-hidden" style={{ opacity: isSaving ? 0.6 : 1 }}>
-                          {q.options.map((opt, optIdx) => {
+                        <div className="flex flex-wrap gap-1.5" style={{ opacity: isSaving ? 0.6 : 1 }}>
+                          {q.options.map(opt => {
                             const isSelected = opt.id === selectedId
                             const textColor  = isDark(opt.color) ? '#fff' : '#222'
-                            const isFirst    = optIdx === 0
-                            const isLast     = optIdx === q.options.length - 1
                             return (
                               <button
                                 key={opt.id}
@@ -260,14 +257,13 @@ function RateTab({
                                 style={isSelected ? {
                                   backgroundColor: opt.color,
                                   color:           textColor,
-                                } : {
-                                  backgroundColor: '#fff',
-                                  color:           '#9ca3af',
-                                }}
+                                  borderColor:     darken(opt.color, 50),
+                                } : undefined}
                                 className={[
-                                  'text-xs px-3 py-1.5 whitespace-nowrap select-none transition-colors',
-                                  isSelected ? 'font-semibold' : 'font-normal hover:bg-gray-50 hover:text-gray-600',
-                                  !isFirst ? 'border-l border-[#e5e7eb]' : '',
+                                  'text-xs px-2.5 py-1 rounded-full border whitespace-nowrap select-none transition-all',
+                                  isSelected
+                                    ? 'font-semibold shadow-sm'
+                                    : 'font-normal border-[#e5e7eb] text-gray-400 bg-white hover:bg-gray-50 hover:text-gray-600',
                                 ].join(' ')}
                               >
                                 {isSelected ? `✓ ${opt.text}` : opt.text}
