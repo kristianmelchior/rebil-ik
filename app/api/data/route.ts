@@ -74,8 +74,8 @@ export async function GET() {
 
     const [allSales, leadMonthly, leadRange30, allNps] = await Promise.all([
       getAllSales(year),
-      getLeadsMonthly(year),
-      getLeadsRange(last30Start, todayStr),
+      getLeadsMonthly(year).catch(() => [] as Awaited<ReturnType<typeof getLeadsMonthly>>),
+      getLeadsRange(last30Start, todayStr).catch(() => [] as Awaited<ReturnType<typeof getLeadsRange>>),
       getAllNps(year),
     ])
 
