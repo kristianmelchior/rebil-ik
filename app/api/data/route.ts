@@ -126,7 +126,8 @@ export async function GET() {
     return Response.json(dashboardWithKategori, {
       headers: { 'Cache-Control': 'no-store' },
     })
-  } catch {
+  } catch (err) {
+    console.error('[/api/data] error:', err)
     return Response.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
