@@ -47,7 +47,7 @@ export default function Page() {
   const [data,          setData]          = useState<RepDashboard | null>(null)
   const [authed,        setAuthed]        = useState(false)
   const [loading,       setLoading]       = useState(true)
-  const [error,         setError]         = useState(false)
+  const [error,         setError]         = useState<string | boolean>(false)
   const [selectedMonth, setSelectedMonth] = useState('')
   const [activeTab,     setActiveTab]     = useState<'dashboard' | 'toplist' | 'feed' | 'nps' | 'stats'>('dashboard')
   const [period,        setPeriod]        = useState<'month' | '30d'>('30d')
@@ -72,7 +72,7 @@ export default function Page() {
       }
       if (!dataRes.ok) {
         if (!cancelled) {
-          setError(true)
+          try { const j = await dataRes.json(); setError(j?.error ?? true) } catch { setError(true) }
           setLoading(false)
         }
         return
@@ -231,6 +231,7 @@ export default function Page() {
       <div className="min-h-screen bg-bg flex items-center justify-center">
         <div className="text-center">
           <p className="text-text-secondary mb-4">Kunne ikke laste data. Prøv igjen.</p>
+          {typeof error === 'string' && <p className="text-xs text-red-500 mb-2 font-mono">{error}</p>}
           <button
             onClick={() => window.location.reload()}
             className="px-6 h-10 rounded-pill bg-brand-green text-white text-sm font-medium hover:bg-brand-green-hover"

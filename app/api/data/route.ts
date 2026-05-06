@@ -127,7 +127,8 @@ export async function GET() {
       headers: { 'Cache-Control': 'no-store' },
     })
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
     console.error('[/api/data] error:', err)
-    return Response.json({ error: 'Internal server error' }, { status: 500 })
+    return Response.json({ error: msg }, { status: 500 })
   }
 }
