@@ -52,16 +52,38 @@ export async function PUT(
 
   // Replace options if provided
   if (body.options !== undefined) {
-    // Delete existing options, then re-insert (cascade handles this safely)
-    await supabase.from('rating_options').delete().eq('question_id', id)
+    // Delete options that are no longer in the list (by id).
+    // Options WITHOUT an id are new and will be inserted below.
+    const keptIds = body.options.map(o => o.id).filter(Boolean) as string[]
+    if (keptIds.length > 0) {
+      const { error: delErr } = await supabase
+        .from('rating_options')
+        .delete()
+        .eq('question_id', id)
+        .not('id', 'in', `(${keptIds.join(',')})`)
+      if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
+    } else {
+      // No existing options kept — delete all
+      const { error: delErr } = await supabase
+        .from('rating_options')
+        .delete()
+        .eq('question_id', id)
+      if (delErr) return Response.json({ error: delErr.message }, { status: 500 })
+    }
+
     if (body.options.length > 0) {
+      // Upsert: existing options keep their id (preserves ratings links),
+      // new options (no id) get a fresh UUID from the database default.
       const rows = body.options.map((o, i) => ({
+        ...(o.id ? { id: o.id } : {}),
         question_id: id,
         text:        o.text,
         color:       o.color ?? '#E8F5E9',
         sort_order:  o.sort_order ?? i,
       }))
-      const { error } = await supabase.from('rating_options').insert(rows)
+      const { error } = await supabase
+        .from('rating_options')
+        .upsert(rows, { onConflict: 'id' })
       if (error) return Response.json({ error: error.message }, { status: 500 })
     }
   }
