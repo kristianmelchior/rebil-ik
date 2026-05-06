@@ -84,6 +84,50 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
   const [repLimits,   setRepLimits]   = useState<Record<string, number>>({})
   const [repLoading,  setRepLoading]  = useState<Record<string, boolean>>({})
   const [copied,      setCopied]      = useState<string | null>(null)
+  const [sortStates,  setSortStates]  = useState<Record<string, { col: keyof RottenDeal; dir: 'asc' | 'desc' }>>({})
+
+  type SortCol = keyof RottenDeal
+
+  function toggleSort(repName: string, col: SortCol) {
+    setSortStates(prev => {
+      const cur = prev[repName]
+      if (cur?.col === col) {
+        return { ...prev, [repName]: { col, dir: cur.dir === 'asc' ? 'desc' : 'asc' } }
+      }
+      return { ...prev, [repName]: { col, dir: 'asc' } }
+    })
+  }
+
+  function sortedDeals(repName: string, deals: RottenDeal[]): RottenDeal[] {
+    const s = sortStates[repName]
+    if (!s) return deals
+    return [...deals].sort((a, b) => {
+      const av = a[s.col] ?? ''
+      const bv = b[s.col] ?? ''
+      const cmp = typeof av === 'number' && typeof bv === 'number'
+        ? av - bv
+        : String(av).localeCompare(String(bv), 'no')
+      return s.dir === 'asc' ? cmp : -cmp
+    })
+  }
+
+  function SortTh({ repName, col, children, className }: { repName: string; col: SortCol; children: React.ReactNode; className?: string }) {
+    const s = sortStates[repName]
+    const active = s?.col === col
+    return (
+      <th
+        className={`text-left font-medium pb-1.5 pr-4 cursor-pointer select-none whitespace-nowrap hover:text-text-primary transition-colors group ${active ? 'text-text-primary' : ''} ${className ?? ''}`}
+        onClick={() => toggleSort(repName, col)}
+      >
+        <span className="inline-flex items-center gap-0.5">
+          {children}
+          <span className={`ml-0.5 text-[9px] transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
+            {active && s.dir === 'desc' ? '▼' : '▲'}
+          </span>
+        </span>
+      </th>
+    )
+  }
 
   // Review state
   const [reviews,      setReviews]      = useState<Record<string, ReviewRow>>({})
@@ -360,17 +404,17 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                                 <table className="w-full text-xs border-collapse">
                                   <thead>
                                     <tr className="text-text-muted">
-                                      <th className="text-left font-medium pb-1.5 pr-4">Deal</th>
-                                      <th className="text-left font-medium pb-1.5 pr-4">Steg</th>
-                                      <th className="text-left font-medium pb-1.5 pr-4">Opprettet</th>
-                                      <th className="text-left font-medium pb-1.5 pr-4">Siste aktivitet</th>
-                                      <th className="text-left font-medium pb-1.5 pr-4">Dager</th>
-                                      <th className="text-left font-medium pb-1.5">Neste aktivitet</th>
+                                      <SortTh repName={rep.name} col="deal_name">Deal</SortTh>
+                                      <SortTh repName={rep.name} col="stage_name">Steg</SortTh>
+                                      <SortTh repName={rep.name} col="create_date">Opprettet</SortTh>
+                                      <SortTh repName={rep.name} col="last_activity_at">Siste aktivitet</SortTh>
+                                      <SortTh repName={rep.name} col="days_since">Dager</SortTh>
+                                      <SortTh repName={rep.name} col="next_activity_date" className="pr-0">Neste aktivitet</SortTh>
                                       <th className="text-left font-medium pb-1.5 pl-4 w-6" />
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {deals.map(deal => {
+                                    {sortedDeals(rep.name, deals).map(deal => {
                                       const review = reviews[deal.deal_id]
                                       const status = reviewStatus(review)
                                       const pending = reviewPending.has(deal.deal_id)
