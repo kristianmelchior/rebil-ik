@@ -116,13 +116,13 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
     const active = s?.col === col
     return (
       <th
-        className={`text-left font-medium pb-1.5 pr-4 cursor-pointer select-none whitespace-nowrap hover:text-text-primary transition-colors group ${active ? 'text-text-primary' : ''} ${className ?? ''}`}
+        className={`text-left font-medium pb-1.5 pr-4 cursor-pointer select-none whitespace-nowrap hover:text-text-primary transition-colors ${active ? 'text-text-primary' : ''} ${className ?? ''}`}
         onClick={() => toggleSort(repName, col)}
       >
         <span className="inline-flex items-center gap-0.5">
           {children}
-          <span className={`ml-0.5 text-[9px] transition-opacity ${active ? 'opacity-100' : 'opacity-0 group-hover:opacity-40'}`}>
-            {active && s.dir === 'desc' ? '▼' : '▲'}
+          <span className={`ml-0.5 text-[9px] ${active ? 'opacity-100' : 'opacity-30'}`}>
+            {active ? (s.dir === 'desc' ? '▼' : '▲') : '↕'}
           </span>
         </span>
       </th>
