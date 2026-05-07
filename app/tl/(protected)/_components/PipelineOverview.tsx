@@ -121,7 +121,7 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
       >
         <span className="inline-flex items-center gap-0.5">
           {children}
-          <span className={`ml-0.5 text-[9px] ${active ? 'opacity-100' : 'opacity-30'}`}>
+          <span className={`ml-1 text-[11px] ${active ? 'opacity-100' : 'opacity-40'}`}>
             {active ? (s.dir === 'desc' ? '▼' : '▲') : '↕'}
           </span>
         </span>
