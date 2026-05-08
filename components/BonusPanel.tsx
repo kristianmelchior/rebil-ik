@@ -6,7 +6,7 @@
 // Past months: shows server-computed figures, no what-if inputs (v1 scope).
 
 import { useEffect, useState } from 'react'
-import type { BonusResult, Rep, SaleRow, ConversionFactorRow } from '@/lib/types'
+import type { BonusResult, Rep, SaleRow, ConversionFactorRow, NpsBonusRow } from '@/lib/types'
 import CarsTable from '@/components/CarsTable'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
@@ -71,10 +71,22 @@ function lookupConvFactor(
   return result
 }
 
-// Look up NPS bonus — same logic as lib/bonus.ts but client-side for what-if
-// Input: score (integer)  Output: bonus NOK
-function lookupNpsBonus(score: number): number {
+// Look up NPS bonus — same logic as lib/bonus.ts but client-side for what-if.
+// Uses precise DB rows when available, falls back to hardcoded config.
+// Input: score (integer), optional dbRows  Output: bonus NOK
+function lookupNpsBonus(score: number, dbRows?: NpsBonusRow[]): number {
   const floored = Math.floor(score / 10) * 10
+
+  if (dbRows && dbRows.length > 0) {
+    let result = 0
+    for (const row of dbRows) {
+      if (row.nps_threshold <= floored) result = row.bonus
+      else break
+    }
+    return result
+  }
+
+  // Fallback: hardcoded config
   let result = 0
   for (const row of NPS_BONUS) {
     if (row[0] <= floored) result = row[1]
@@ -90,11 +102,12 @@ interface BonusPanelProps {
   salesByMonth:      Record<string, SaleRow[]>
   lastUpdated:       string
   conversionFactors: ConversionFactorRow[]
+  npsBonus:          NpsBonusRow[]
   onMonthChange:     (month: string) => void
 }
 
 export default function BonusPanel({
-  bonus, bonusByMonth, rep, salesByMonth, lastUpdated, conversionFactors, onMonthChange,
+  bonus, bonusByMonth, rep, salesByMonth, lastUpdated, conversionFactors, npsBonus, onMonthChange,
 }: BonusPanelProps) {
   const currentMonthKey = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
 
@@ -137,7 +150,7 @@ export default function BonusPanel({
 
   // Derived what-if values — recalculated on every render from input state
   const simConvFactor             = lookupConvFactor(simConvRate, rep.tier, conversionFactors)
-  const simNpsBonus               = lookupNpsBonus(simNpsScore)
+  const simNpsBonus               = lookupNpsBonus(simNpsScore, npsBonus)
   const simKonverteringsbonus     = Math.round(simEstimatedBaseBonus * (simConvFactor - 1))
   const simBonusEtterKonvertering = Math.round(simEstimatedBaseBonus * simConvFactor)
   const simTotalBonus             = simBonusEtterKonvertering + simNpsBonus

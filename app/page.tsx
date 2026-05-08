@@ -430,6 +430,7 @@ export default function Page() {
             salesByMonth={data.salesByMonth}
             lastUpdated={data.lastUpdated}
             conversionFactors={data.conversionFactors ?? []}
+            npsBonus={data.npsBonus ?? []}
             onMonthChange={setSelectedMonth}
           />
         </main>

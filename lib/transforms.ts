@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint, KontakttidRangeAgg } from './types'
+import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint, KontakttidRangeAgg, ConversionFactorRow, NpsBonusRow } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -342,7 +342,8 @@ export function buildDashboard(
   kontakttidMonthly: KontakttidAgg[],
   kontakttidAvgMonthly: KontakttidAvgAgg[],
   kontakttidRange30: KontakttidRangeAgg[],
-  convFactors: import('./types').ConversionFactorRow[] = []
+  convFactors: ConversionFactorRow[] = [],
+  npsBonusTable: NpsBonusRow[] = []
 ): Omit<RepDashboard, 'leadsHandledKategoriTrend'> {
   const today = new Date()
   const year  = today.getFullYear()
@@ -394,7 +395,7 @@ export function buildDashboard(
     if (ym === currentMonthKey) continue
     const ymLeadCount = repLeadMonthly.filter(r => r.month === ym).reduce((s, r) => s + Number(r.teller_true), 0)
     const ymNpsRows   = filterByDateRange(repNps, 'submitted_at', `${ym}-01`, `${ym}-31`)
-    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows, convFactors)
+    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows, convFactors, npsBonusTable)
   }
 
   return {
@@ -405,8 +406,9 @@ export function buildDashboard(
     medianLast30Days:    computeTeamMedian(allSales, last30LeadMap, last30LeadTotalMap, allNps, last30Start, todayStr),
     trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
     medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
-    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth, convFactors),
+    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth, convFactors, npsBonusTable),
     conversionFactors:   convFactors,
+    npsBonus:            npsBonusTable,
     bonusByMonth,
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
     salesLast30Days:     repSales30,
