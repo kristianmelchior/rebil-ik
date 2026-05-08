@@ -84,6 +84,17 @@ export default function BonusPanel({
   const [simNpsScore,      setSimNpsScore]      = useState(bonus.npsScore ?? 40)
   const [simEstimatedCars, setSimEstimatedCars] = useState(bonus.carsThisMonth)
 
+  // Conversion calculator state
+  const [calcOpen,       setCalcOpen]       = useState(false)
+  const [calcLeads,      setCalcLeads]      = useState(bonus.leadsThisMonth)
+  const [calcBiler,      setCalcBiler]      = useState(bonus.carsThisMonth)
+  const [calcAdjLeads,   setCalcAdjLeads]   = useState(0)
+  const [calcAdjBiler,   setCalcAdjBiler]   = useState(0)
+
+  const calcTotalLeads = Math.max(1, calcLeads + calcAdjLeads)
+  const calcTotalBiler = Math.max(0, calcBiler + calcAdjBiler)
+  const calcResult     = roundConvHalfStep((calcTotalBiler / calcTotalLeads) * 100)
+
   // Re-sync from server when selecting inneværende måned (e.g. after viewing a past month)
   useEffect(() => {
     if (selectedMonth !== currentMonthKey) return
@@ -204,6 +215,76 @@ export default function BonusPanel({
             <p className="text-xs text-text-hint mt-1.5">
               Faktor: {isCurrentMonth ? simConvFactor : (pastBonus?.convFactor ?? 1)} ({rep.tier})
             </p>
+
+            {/* Conversion calculator toggle */}
+            {isCurrentMonth && (
+              <button
+                type="button"
+                onClick={() => setCalcOpen(o => !o)}
+                className="mt-2 text-[11px] text-text-muted hover:text-text-primary transition-colors flex items-center gap-1"
+              >
+                <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                  <rect x="1" y="1" width="10" height="10" rx="1.5"/>
+                  <path d="M3 3h2M7 3h2M3 6h2M7 6h2M3 9h2M7 9h2"/>
+                </svg>
+                {calcOpen ? 'Skjul kalkulator' : 'Konverteringskalkulator'}
+              </button>
+            )}
+
+            {/* Inline calculator panel */}
+            {isCurrentMonth && calcOpen && (
+              <div className="mt-3 border border-border rounded-lg p-3 bg-bg text-xs space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-text-muted mb-1">Biler (estimert)</label>
+                    <input
+                      type="number" min={0} value={calcBiler}
+                      onChange={e => setCalcBiler(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-text-muted mb-1">Leads som teller</label>
+                    <input
+                      type="number" min={1} value={calcLeads}
+                      onChange={e => setCalcLeads(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                      className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="border-t border-border/60 pt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-text-muted mb-1">Justér biler</label>
+                    <input
+                      type="number" value={calcAdjBiler}
+                      onChange={e => setCalcAdjBiler(parseInt(e.target.value, 10) || 0)}
+                      className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-text-muted mb-1">Justér leads</label>
+                    <input
+                      type="number" value={calcAdjLeads}
+                      onChange={e => setCalcAdjLeads(parseInt(e.target.value, 10) || 0)}
+                      className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between border-t border-border/60 pt-2">
+                  <span className="text-text-muted">
+                    {calcTotalBiler}/{calcTotalLeads} leads →{' '}
+                    <span className="font-semibold text-text-primary">{calcResult}%</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setSimConvRate(calcResult); setCalcOpen(false) }}
+                    className="text-[11px] font-medium px-2.5 py-1 rounded bg-text-primary text-white hover:opacity-80 transition-opacity"
+                  >
+                    Bruk denne →
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* NPS — editable for current month, locked for past */}
