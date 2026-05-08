@@ -341,7 +341,8 @@ export function buildDashboard(
   konvPlattformRange30: KonvPlattformRangeAgg[],
   kontakttidMonthly: KontakttidAgg[],
   kontakttidAvgMonthly: KontakttidAvgAgg[],
-  kontakttidRange30: KontakttidRangeAgg[]
+  kontakttidRange30: KontakttidRangeAgg[],
+  convFactors: import('./types').ConversionFactorRow[] = []
 ): Omit<RepDashboard, 'leadsHandledKategoriTrend'> {
   const today = new Date()
   const year  = today.getFullYear()
@@ -393,7 +394,7 @@ export function buildDashboard(
     if (ym === currentMonthKey) continue
     const ymLeadCount = repLeadMonthly.filter(r => r.month === ym).reduce((s, r) => s + Number(r.teller_true), 0)
     const ymNpsRows   = filterByDateRange(repNps, 'submitted_at', `${ym}-01`, `${ym}-31`)
-    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows)
+    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows, convFactors)
   }
 
   return {
@@ -404,7 +405,8 @@ export function buildDashboard(
     medianLast30Days:    computeTeamMedian(allSales, last30LeadMap, last30LeadTotalMap, allNps, last30Start, todayStr),
     trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
     medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
-    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth),
+    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth, convFactors),
+    conversionFactors:   convFactors,
     bonusByMonth,
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
     salesLast30Days:     repSales30,

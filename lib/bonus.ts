@@ -1,20 +1,38 @@
 // Bonus calculation — steps 1–8. Pure functions, no side effects.
 // Never change a formula. Flag if anything looks wrong.
 
-import type { Rep, SaleRow, NpsRow, BonusResult } from './types'
+import type { Rep, SaleRow, NpsRow, BonusResult, ConversionFactorRow } from './types'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
 
 // Look up conversion factor for a given rate and tier.
-// Floors rate to nearest 0.5, finds last table row where row[0] <= floored rate.
-// Input: rate (convRate %), tier  Output: factor (number >= 1.0)
-function lookupConvFactor(rate: number, tier: 'IK' | 'Senior' | 'Spesialist'): number {
+// When dbFactors is provided (precise rows from Supabase), uses those with full decimal precision.
+// Falls back to the hardcoded config table (floors to nearest 0.5) when dbFactors is absent.
+// Input: rate (convRate %), tier, optional dbFactors  Output: factor (number >= 1.0)
+function lookupConvFactor(
+  rate: number,
+  tier: 'IK' | 'Senior' | 'Spesialist',
+  dbFactors?: ConversionFactorRow[]
+): number {
+  if (dbFactors && dbFactors.length > 0) {
+    // konvertering in DB is decimal (0.105 = 10.5%); rate is in %
+    const rateDecimal = rate / 100
+    const floored = Math.floor(rateDecimal / 0.005) * 0.005
+    let result = 1.0
+    for (const row of dbFactors) {
+      if (row.konvertering <= floored + 0.000001) {
+        result = tier === 'Spesialist' ? row.faktor_spesialist
+               : tier === 'Senior'    ? row.faktor_senior
+               : row.faktor_ik
+      } else break
+    }
+    return result
+  }
+
+  // Fallback: hardcoded config table (floors to nearest 0.5%)
   const floored = Math.floor(rate / 0.5) * 0.5
   const col = TIER_COL_INDEX[tier]
-
-  // Above table maximum — use last row
   if (floored > 19.5) return CONVERSION_FACTORS[CONVERSION_FACTORS.length - 1][col]
-
   let result = 1.0
   for (const row of CONVERSION_FACTORS) {
     if (row[0] <= floored) result = row[col]
@@ -43,7 +61,8 @@ export function computeBonus(
   rep: Rep,
   saleRows: SaleRow[],
   leadCount: number,
-  npsRows: NpsRow[]
+  npsRows: NpsRow[],
+  convFactors?: ConversionFactorRow[]
 ): BonusResult {
   // Step 1 — Base bonus: SUM(bonus) for all rows (null → 0; Avslått rows included)
   const baseBonus = saleRows.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
@@ -55,7 +74,7 @@ export function computeBonus(
   const convRate = leadsThisMonth === 0 ? 0 : (carsThisMonth / leadsThisMonth) * 100
 
   // Step 3 — Conversion factor lookup (skip if no leads)
-  const convFactor = leadsThisMonth === 0 ? 1.0 : lookupConvFactor(convRate, rep.tier)
+  const convFactor = leadsThisMonth === 0 ? 1.0 : lookupConvFactor(convRate, rep.tier, convFactors)
 
   // Step 4 — Bonus breakdown for display
   const bonusBiler = baseBonus                                // display line 1

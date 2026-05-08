@@ -190,6 +190,7 @@ export interface RepDashboard {
   currentMonthKonvPlattform: { rate: number | null; count: number }
   last30KonvPlattform:       { rate: number | null; count: number }
   lastUpdated: string
+  conversionFactors: ConversionFactorRow[]
   admin?: AdminDashboardMeta
   teamView?: TeamlederDashboardMeta
 }
@@ -234,6 +235,14 @@ export interface FeedCommentPublic {
 }
 
 export type FeedCommentsMap = Record<string, FeedCommentPublic[]>
+
+// Row from public.conversion_factors — precise values synced from Google Sheets
+export interface ConversionFactorRow {
+  konvertering:     number   // decimal form, e.g. 0.105 = 10.5%
+  faktor_ik:        number
+  faktor_senior:    number
+  faktor_spesialist: number
+}
 
 // Leads håndtert per month, broken down by leads_kategori — for IK-dash trend chart
 export interface LeadsHandledKategoriAgg {

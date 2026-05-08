@@ -6,7 +6,7 @@
 // Past months: shows server-computed figures, no what-if inputs (v1 scope).
 
 import { useEffect, useState } from 'react'
-import type { BonusResult, Rep, SaleRow } from '@/lib/types'
+import type { BonusResult, Rep, SaleRow, ConversionFactorRow } from '@/lib/types'
 import CarsTable from '@/components/CarsTable'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
@@ -35,10 +35,31 @@ function roundConvHalfStep(n: number): number {
   return Math.round(n * 2) / 2
 }
 
-// Look up conversion factor — same logic as lib/bonus.ts but client-side for what-if
-// Input: rate (%), tier  Output: factor
-function lookupConvFactor(rate: number, tier: 'IK' | 'Senior' | 'Spesialist'): number {
+// Look up conversion factor — mirrors lib/bonus.ts lookupConvFactor for client-side what-if.
+// Uses precise DB factors when available, falls back to hardcoded config.
+// Input: rate (%), tier, optional dbFactors  Output: factor
+function lookupConvFactor(
+  rate: number,
+  tier: 'IK' | 'Senior' | 'Spesialist',
+  dbFactors?: ConversionFactorRow[]
+): number {
   if (rate <= 0) return 1.0
+
+  if (dbFactors && dbFactors.length > 0) {
+    const rateDecimal = rate / 100
+    const floored = Math.floor(rateDecimal / 0.005) * 0.005
+    let result = 1.0
+    for (const row of dbFactors) {
+      if (row.konvertering <= floored + 0.000001) {
+        result = tier === 'Spesialist' ? row.faktor_spesialist
+               : tier === 'Senior'    ? row.faktor_senior
+               : row.faktor_ik
+      } else break
+    }
+    return result
+  }
+
+  // Fallback: hardcoded config
   const floored = Math.floor(rate / 0.5) * 0.5
   const col = TIER_COL_INDEX[tier]
   if (floored > 19.5) return CONVERSION_FACTORS[CONVERSION_FACTORS.length - 1][col]
@@ -63,16 +84,17 @@ function lookupNpsBonus(score: number): number {
 }
 
 interface BonusPanelProps {
-  bonus:          BonusResult
-  bonusByMonth:   Record<string, BonusResult>
-  rep:            Rep
-  salesByMonth:   Record<string, SaleRow[]>
-  lastUpdated:    string
-  onMonthChange:  (month: string) => void
+  bonus:             BonusResult
+  bonusByMonth:      Record<string, BonusResult>
+  rep:               Rep
+  salesByMonth:      Record<string, SaleRow[]>
+  lastUpdated:       string
+  conversionFactors: ConversionFactorRow[]
+  onMonthChange:     (month: string) => void
 }
 
 export default function BonusPanel({
-  bonus, bonusByMonth, rep, salesByMonth, lastUpdated, onMonthChange,
+  bonus, bonusByMonth, rep, salesByMonth, lastUpdated, conversionFactors, onMonthChange,
 }: BonusPanelProps) {
   const currentMonthKey = new Date().toISOString().slice(0, 7) // 'YYYY-MM'
 
@@ -114,7 +136,7 @@ export default function BonusPanel({
     : bonus.baseBonus
 
   // Derived what-if values — recalculated on every render from input state
-  const simConvFactor             = lookupConvFactor(simConvRate, rep.tier)
+  const simConvFactor             = lookupConvFactor(simConvRate, rep.tier, conversionFactors)
   const simNpsBonus               = lookupNpsBonus(simNpsScore)
   const simKonverteringsbonus     = Math.round(simEstimatedBaseBonus * (simConvFactor - 1))
   const simBonusEtterKonvertering = Math.round(simEstimatedBaseBonus * simConvFactor)

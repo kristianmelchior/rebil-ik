@@ -505,6 +505,17 @@ export const getLeadsHandledMonthlyByKategori = unstable_cache(
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
+// Fetch all conversion factor rows ordered by konvertering ascending.
+// konvertering is stored as decimal (0.105 = 10.5%).
+export async function getConversionFactors(): Promise<import('./types').ConversionFactorRow[]> {
+  const { data, error } = await supabase
+    .from('conversion_factors')
+    .select('konvertering, faktor_ik, faktor_senior, faktor_spesialist')
+    .order('konvertering', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as import('./types').ConversionFactorRow[]
+}
+
 // Lead tildeling: per-person counts of leads received (tildelt) and lost (mistet)
 // for an arbitrary date range, based on rep_name vs dealowner_assigned_to.
 export async function getLeadTildeling(from: string, to: string): Promise<{ name: string; teamleder: string; tildelt: number; mistet: number }[]> {
