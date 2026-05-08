@@ -88,11 +88,11 @@ export default function BonusPanel({
   const [calcOpen,       setCalcOpen]       = useState(false)
   const [calcLeads,      setCalcLeads]      = useState(bonus.leadsThisMonth)
   const [calcBiler,      setCalcBiler]      = useState(bonus.carsThisMonth)
-  const [calcAdjLeads,   setCalcAdjLeads]   = useState(0)
-  const [calcAdjBiler,   setCalcAdjBiler]   = useState(0)
+  const [calcAdjLeads,   setCalcAdjLeads]   = useState<string>('0')
+  const [calcAdjBiler,   setCalcAdjBiler]   = useState<string>('0')
 
-  const calcTotalLeads = Math.max(1, calcLeads + calcAdjLeads)
-  const calcTotalBiler = Math.max(0, calcBiler + calcAdjBiler)
+  const calcTotalLeads = Math.max(1, calcLeads + (parseInt(calcAdjLeads, 10) || 0))
+  const calcTotalBiler = Math.max(0, calcBiler + (parseInt(calcAdjBiler, 10) || 0))
   const calcResult     = roundConvHalfStep((calcTotalBiler / calcTotalLeads) * 100)
 
   // Re-sync from server when selecting inneværende måned (e.g. after viewing a past month)
@@ -256,16 +256,16 @@ export default function BonusPanel({
                   <div>
                     <label className="block text-text-muted mb-1">Justér biler</label>
                     <input
-                      type="number" value={calcAdjBiler}
-                      onChange={e => setCalcAdjBiler(parseInt(e.target.value, 10) || 0)}
+                      type="text" inputMode="numeric" value={calcAdjBiler}
+                      onChange={e => { if (/^-?\d*$/.test(e.target.value)) setCalcAdjBiler(e.target.value) }}
                       className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
                     />
                   </div>
                   <div>
                     <label className="block text-text-muted mb-1">Justér leads</label>
                     <input
-                      type="number" value={calcAdjLeads}
-                      onChange={e => setCalcAdjLeads(parseInt(e.target.value, 10) || 0)}
+                      type="text" inputMode="numeric" value={calcAdjLeads}
+                      onChange={e => { if (/^-?\d*$/.test(e.target.value)) setCalcAdjLeads(e.target.value) }}
                       className="w-full border border-border rounded px-2 py-1 text-xs font-medium text-text-primary focus:border-[var(--rebil-red)] outline-none"
                     />
                   </div>
