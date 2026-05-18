@@ -37,7 +37,7 @@ async function getData(tlFilter?: string) {
   const [{ data, error }, reps, { data: syncData }] = await Promise.all([
     supabase.rpc('get_pipeline_with_rotten'),
     getAllRepsAdmin(),
-    supabase.from('sync_status').select('last_synced_at').eq('id', 1).single(),
+    supabase.from('sync_status').select('last_synced_at').eq('id', 1).maybeSingle(),
   ])
   if (error) {
     const msg = (error as { message?: string }).message ?? JSON.stringify(error)
