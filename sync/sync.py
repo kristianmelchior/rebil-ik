@@ -195,10 +195,10 @@ def main():
             supabase.table("deals_current").delete().in_("deal_id", stale_ids[i : i + batch_size]).execute()
     print(f"  Deleted {len(stale_ids)} stale deal(s)")
 
-    # Set fetched_at only after everything succeeded
+    # Record sync timestamp in sync_status (single row) — avoids bulk-writing all deal rows
     now_iso = datetime.now(timezone.utc).isoformat()
-    supabase.table("deals_current").update({"fetched_at": now_iso}).not_.is_("deal_id", None).execute()
-    print(f"  fetched_at: {now_iso}")
+    supabase.table("sync_status").upsert({"id": 1, "last_synced_at": now_iso}, on_conflict="id").execute()
+    print(f"  last_synced_at: {now_iso}")
 
     print("Done.")
 
