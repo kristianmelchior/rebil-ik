@@ -191,6 +191,7 @@ export interface RepDashboard {
   last30KonvPlattform:       { rate: number | null; count: number }
   lastUpdated: string
   conversionFactors: ConversionFactorRow[]
+  npsBonus: NpsBonusRow[]
   admin?: AdminDashboardMeta
   teamView?: TeamlederDashboardMeta
 }
@@ -235,6 +236,12 @@ export interface FeedCommentPublic {
 }
 
 export type FeedCommentsMap = Record<string, FeedCommentPublic[]>
+
+// Row from public.nps_bonus — synced from Google Sheets
+export interface NpsBonusRow {
+  nps_threshold: number
+  bonus:         number
+}
 
 // Row from public.conversion_factors — precise values synced from Google Sheets
 export interface ConversionFactorRow {

@@ -505,6 +505,16 @@ export const getLeadsHandledMonthlyByKategori = unstable_cache(
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
+// Fetch all NPS bonus rows ordered by nps_threshold ascending.
+export async function getNpsBonusTable(): Promise<import('./types').NpsBonusRow[]> {
+  const { data, error } = await supabase
+    .from('nps_bonus')
+    .select('nps_threshold, bonus')
+    .order('nps_threshold', { ascending: true })
+  if (error) throw error
+  return (data ?? []) as import('./types').NpsBonusRow[]
+}
+
 // Fetch all conversion factor rows ordered by konvertering ascending.
 // konvertering is stored as decimal (0.105 = 10.5%).
 export async function getConversionFactors(): Promise<import('./types').ConversionFactorRow[]> {

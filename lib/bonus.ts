@@ -1,7 +1,7 @@
 // Bonus calculation — steps 1–8. Pure functions, no side effects.
 // Never change a formula. Flag if anything looks wrong.
 
-import type { Rep, SaleRow, NpsRow, BonusResult, ConversionFactorRow } from './types'
+import type { Rep, SaleRow, NpsRow, BonusResult, ConversionFactorRow, NpsBonusRow } from './types'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
 
@@ -43,9 +43,21 @@ function lookupConvFactor(
 
 // Look up NPS bonus for a given score.
 // Floors score to nearest 10, finds last table row where row[0] <= floored score.
-// Input: score (integer NPS score)  Output: bonus NOK
-function lookupNpsBonus(score: number): number {
+// Uses precise DB rows when available, falls back to hardcoded config.
+// Input: score (integer NPS score), optional dbRows  Output: bonus NOK
+function lookupNpsBonus(score: number, dbRows?: NpsBonusRow[]): number {
   const floored = Math.floor(score / 10) * 10
+
+  if (dbRows && dbRows.length > 0) {
+    let result = 0
+    for (const row of dbRows) {
+      if (row.nps_threshold <= floored) result = row.bonus
+      else break
+    }
+    return result
+  }
+
+  // Fallback: hardcoded config
   let result = 0
   for (const row of NPS_BONUS) {
     if (row[0] <= floored) result = row[1]
@@ -62,7 +74,8 @@ export function computeBonus(
   saleRows: SaleRow[],
   leadCount: number,
   npsRows: NpsRow[],
-  convFactors?: ConversionFactorRow[]
+  convFactors?: ConversionFactorRow[],
+  npsBonusTable?: NpsBonusRow[]
 ): BonusResult {
   // Step 1 — Base bonus: SUM(bonus) for all rows (null → 0; Avslått rows included)
   const baseBonus = saleRows.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
@@ -88,7 +101,7 @@ export function computeBonus(
     : Math.round(npsValues.reduce((s, v) => s + v, 0) / npsValues.length)
 
   // Step 6 — NPS bonus lookup
-  const npsBonus = npsScore === null ? 0 : lookupNpsBonus(npsScore)
+  const npsBonus = npsScore === null ? 0 : lookupNpsBonus(npsScore, npsBonusTable)
 
   // Step 7 — Total and projected bonus
   const totalBonus = bonusEtterKonvertering + npsBonus
