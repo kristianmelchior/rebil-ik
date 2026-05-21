@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import CollapsibleSection from './CollapsibleSection'
 import type { ReviewRow } from '@/app/tl/api/pipeline/review/route'
+import { cleanScore, scoreStyle, rottenBadgeClass } from '@/lib/tl/pipeline-utils'
 
 export interface CategoryData {
   name:        string
@@ -48,12 +49,6 @@ const SNOOZE_PRESETS = [
   { days: 30, label: '1 måned',    hint: null },
 ]
 
-function rottenBadgeClass(rottenCount: number, total: number): string {
-  const pct = total > 0 ? rottenCount / total : 0
-  if (pct > 0.5)  return 'bg-[#FCEBEB] text-[#A32D2D]'
-  if (pct > 0.25) return 'bg-[#FDE8D0] text-[#C2580A]'
-  return 'text-text-muted'
-}
 
 function snoozeUntil(r: ReviewRow): Date {
   const d = new Date(r.reviewed_at)
@@ -84,7 +79,8 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
   const [repLimits,   setRepLimits]   = useState<Record<string, number>>({})
   const [repLoading,  setRepLoading]  = useState<Record<string, boolean>>({})
   const [copied,      setCopied]      = useState<string | null>(null)
-  const [sortStates,  setSortStates]  = useState<Record<string, { col: keyof RottenDeal; dir: 'asc' | 'desc' }>>({})
+  const [sortStates,    setSortStates]    = useState<Record<string, { col: keyof RottenDeal; dir: 'asc' | 'desc' }>>({})
+  const [selectedDeals, setSelectedDeals] = useState<Record<string, Set<string>>>({})
 
   type SortCol = keyof RottenDeal
 
@@ -226,11 +222,31 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
     await fetchDeals(name, next)
   }
 
-  function copyForSlack(name: string, deals: RottenDeal[]) {
+  function toggleDeal(repName: string, dealId: string) {
+    setSelectedDeals(prev => {
+      const cur = new Set(prev[repName] ?? [])
+      if (cur.has(dealId)) cur.delete(dealId)
+      else cur.add(dealId)
+      return { ...prev, [repName]: new Set(cur) }
+    })
+  }
+
+  function toggleAllDeals(repName: string, deals: RottenDeal[]) {
+    setSelectedDeals(prev => {
+      const cur = prev[repName] ?? new Set<string>()
+      const allSelected = deals.every(d => cur.has(d.deal_id))
+      return { ...prev, [repName]: allSelected ? new Set() : new Set(deals.map(d => d.deal_id)) }
+    })
+  }
+
+  function copyForSlack(name: string, deals: RottenDeal[], selectedIds?: Set<string>) {
+    const toCopy = selectedIds && selectedIds.size > 0
+      ? deals.filter(d => selectedIds.has(d.deal_id))
+      : deals
     const lines = [
-      `*Over grense — ${name.trim()}* (${deals.length} vist)`,
+      `*Over grense — ${name.trim()}* (${toCopy.length} av ${deals.length})`,
       '',
-      ...deals.map(d => {
+      ...toCopy.map(d => {
         const neste = d.next_activity_date
           ? new Date(d.next_activity_date).toLocaleDateString('no-NO', { day: 'numeric', month: 'short' })
           : 'Ingen neste aktivitet'
@@ -242,6 +258,10 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
       setCopied(name)
       setTimeout(() => setCopied(c => c === name ? null : c), 2000)
     })
+  }
+
+  function copyForSlackWrapped(repName: string, deals: RottenDeal[]) {
+    copyForSlack(repName, deals, selectedDeals[repName])
   }
 
   return (
@@ -317,9 +337,11 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                 <thead>
                   <tr className="border-b border-border">
                     <th className="py-2 pr-3 text-left font-medium text-text-muted whitespace-nowrap w-6" />
-                    <th className="py-2 pr-3 text-left font-medium text-text-muted whitespace-nowrap">Konsulent</th>
+                    <th className="py-2 pr-4 text-left font-medium text-text-muted whitespace-nowrap">Konsulent</th>
+                    <th className="py-2 px-2 text-center font-medium text-text-muted whitespace-nowrap w-12">Score</th>
+                    <th className="py-2 pl-2 pr-4 text-left font-medium text-text-muted whitespace-nowrap w-20">Deals</th>
                     {activeCatIndices.map(i => (
-                      <th key={categories[i].name} className="py-2 px-3 text-center font-medium text-text-muted whitespace-nowrap uppercase tracking-wide">
+                      <th key={categories[i].name} className="py-2 px-3 text-center font-medium text-text-muted uppercase tracking-wide" style={{ width: `${Math.floor(100 / activeCatIndices.length)}%`, minWidth: 100 }}>
                         {categories[i].name}
                       </th>
                     ))}
@@ -327,9 +349,11 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                 </thead>
                 <tbody>
                   {reps.map((rep, repIdx) => {
-                    const isExpanded = expandedRep === rep.name
-                    const deals      = repDeals[rep.name]
+                    const isExpanded  = expandedRep === rep.name
+                    const deals       = repDeals[rep.name]
                     const totalRotten = rep.categories.reduce((s, c) => s + c.rottenCount, 0)
+                    const totalDeals  = rep.categories.reduce((s, c) => s + c.count, 0)
+                    const score       = cleanScore(totalRotten)
                     return (
                       <Fragment key={rep.name}>
                         <tr
@@ -351,24 +375,42 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                               </button>
                             )}
                           </td>
-                          <td className="py-2 pr-3 font-medium text-text-primary whitespace-nowrap">{rep.name}</td>
+                          <td className="py-2 pr-4 align-top">
+                            <span className="text-sm font-semibold text-text-primary whitespace-nowrap">{rep.name}</span>
+                          </td>
+                          <td className="py-2 px-2 text-center align-top">
+                            <span
+                              className={`inline-block text-[11px] font-bold px-1.5 py-0.5 rounded ${scoreStyle(score)}`}
+                              title={`Ryddighetsscore: ${totalRotten} over grense`}
+                            >
+                              {score}
+                            </span>
+                          </td>
+                          <td className="py-2 pl-2 pr-4 align-top">
+                            <span className="text-xs text-text-muted whitespace-nowrap">{totalDeals} deals</span>
+                          </td>
                           {activeCatIndices.map(i => {
                             const cat       = rep.categories[i]
                             const hasRotten = cat.rottenCount > 0
                             return (
                               <td
                                 key={i}
-                                className="py-2 px-3 text-center"
+                                className="py-2 px-3 text-center align-top"
                                 onMouseEnter={e => hasRotten && showTooltip(e, cat.stages)}
                                 onMouseLeave={() => setTooltip(null)}
                               >
-                                {hasRotten ? (
-                                  <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium cursor-default ${rottenBadgeClass(cat.rottenCount, cat.count)}`}>
-                                    {cat.rottenCount}
-                                  </span>
-                                ) : (
-                                  <span className="text-text-muted">—</span>
-                                )}
+                                <div className="flex flex-col items-center gap-0.5">
+                                  {cat.count === 0 ? (
+                                    <span className="text-[11px] invisible">0</span>
+                                  ) : hasRotten ? (
+                                    <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium cursor-default ${rottenBadgeClass(cat.rottenCount)}`}>
+                                      {cat.rottenCount}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[11px] font-medium text-text-muted">0</span>
+                                  )}
+                                  <span className="text-[10px] text-text-muted">av {cat.count}</span>
+                                </div>
                               </td>
                             )
                           })}
@@ -377,7 +419,7 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                         {/* Expanded deal list */}
                         {isExpanded && (
                           <tr className="border-b border-border bg-[#FAFAFA]">
-                            <td colSpan={2 + activeCatIndices.length} className="px-4 py-3">
+                            <td colSpan={4 + activeCatIndices.length} className="px-4 py-3">
                               {deals === 'loading' && (
                                 <p className="text-xs text-text-muted py-1">Laster…</p>
                               )}
@@ -389,21 +431,39 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                               )}
                               {Array.isArray(deals) && deals.length > 0 && (
                                 <>
-                                <div className="flex justify-end mb-2">
-                                  <button
-                                    onClick={() => copyForSlack(rep.name, deals)}
-                                    className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-primary border border-border rounded px-2 py-1 transition-colors"
-                                  >
-                                    {copied === rep.name ? (
-                                      <><svg className="w-3 h-3 text-[#639922]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg> Kopiert!</>
-                                    ) : (
-                                      <><svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="1" width="7" height="8" rx="1"/><path d="M1 4v7"/></svg> Kopier til Slack</>
-                                    )}
-                                  </button>
-                                </div>
+                                {(() => {
+                                  const sel = selectedDeals[rep.name] ?? new Set<string>()
+                                  const selCount = sel.size
+                                  return (
+                                    <div className="flex justify-end mb-2">
+                                      <button
+                                        onClick={() => copyForSlackWrapped(rep.name, deals)}
+                                        className="flex items-center gap-1.5 text-[11px] text-text-muted hover:text-text-primary border border-border rounded px-2 py-1 transition-colors"
+                                      >
+                                        {copied === rep.name ? (
+                                          <><svg className="w-3 h-3 text-[#639922]" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M2 6l3 3 5-5"/></svg> Kopiert!</>
+                                        ) : (
+                                          <>
+                                            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="4" y="1" width="7" height="8" rx="1"/><path d="M1 4v7"/></svg>
+                                            {selCount > 0 ? `Kopier ${selCount} valgte til Slack` : 'Kopier til Slack'}
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )
+                                })()}
                                 <table className="w-full text-xs border-collapse">
                                   <thead>
                                     <tr className="text-text-muted">
+                                      <th className="pb-1.5 pr-2 w-5">
+                                        <input
+                                          type="checkbox"
+                                          className="cursor-pointer accent-[#185FA5]"
+                                          checked={deals.every(d => (selectedDeals[rep.name] ?? new Set()).has(d.deal_id))}
+                                          onChange={() => toggleAllDeals(rep.name, deals)}
+                                          title="Velg alle"
+                                        />
+                                      </th>
                                       <SortTh repName={rep.name} col="deal_name">Deal</SortTh>
                                       <SortTh repName={rep.name} col="stage_name">Steg</SortTh>
                                       <SortTh repName={rep.name} col="create_date">Opprettet</SortTh>
@@ -418,13 +478,23 @@ export default function PipelineOverview({ total, categories, reps, lastSyncedAt
                                       const review = reviews[deal.deal_id]
                                       const status = reviewStatus(review)
                                       const pending = reviewPending.has(deal.deal_id)
+                                      const isSelected = (selectedDeals[rep.name] ?? new Set()).has(deal.deal_id)
 
                                       const rowBg =
+                                        isSelected           ? 'bg-[#EEF4FC]' :
                                         status === 'active'  ? 'bg-[#F0FBF0]' :
                                         status === 'expired' ? 'bg-[#FFFBEB]' : ''
 
                                       return (
                                         <tr key={deal.deal_id} className={`border-t border-border/50 ${rowBg}`}>
+                                          <td className="py-1.5 pr-2">
+                                            <input
+                                              type="checkbox"
+                                              className="cursor-pointer accent-[#185FA5]"
+                                              checked={isSelected}
+                                              onChange={() => toggleDeal(rep.name, deal.deal_id)}
+                                            />
+                                          </td>
                                           <td className="py-1.5 pr-4">
                                             <a
                                               href={HS_URL(deal.deal_id)}

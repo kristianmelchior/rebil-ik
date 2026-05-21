@@ -17,6 +17,7 @@ import NpsTab from '@/components/NpsTab'
 import ToplistTab from '@/components/ToplistTab'
 import StatsTab from '@/components/StatsTab'
 import RatingPreviewPopup from '@/components/RatingPreviewPopup'
+import RepPipelineWidget from '@/components/RepPipelineWidget'
 
 const fetchOpts: RequestInit = { credentials: 'include' }
 
@@ -426,6 +427,7 @@ export default function Page() {
             currentMonthSameDagPct={data.currentMonthSameDagPct}
             last30SameDagPct={data.last30SameDagPct}
           />
+          <RepPipelineWidget />
           <TrendCharts
             trend={data.trend}
             medianTrend={data.medianTrend}
