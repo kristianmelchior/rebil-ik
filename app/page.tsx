@@ -160,49 +160,64 @@ export default function Page() {
           `}</style>
 
           <div className="car-drive">
-            <svg width="160" height="80" viewBox="0 0 160 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-              {/* Body */}
-              <rect x="10" y="34" width="140" height="28" rx="6" fill="#c0392b" />
-              {/* Roof / cabin */}
-              <path d="M45 34 Q52 14 75 12 L105 12 Q122 12 118 34 Z" fill="#c0392b" />
-              {/* Windshield */}
-              <path d="M52 33 Q57 18 75 16 L100 16 Q113 16 112 33 Z" fill="#a8d8f0" opacity="0.85" />
-              {/* Side windows */}
-              <rect x="54" y="16" width="22" height="17" rx="2" fill="#a8d8f0" opacity="0.85" />
-              {/* Headlight */}
-              <rect x="146" y="42" width="8" height="6" rx="2" fill="#f9e04b" />
-              {/* Taillight */}
-              <rect x="6" y="42" width="8" height="6" rx="2" fill="#e74c3c" />
-              {/* Bumpers */}
-              <rect x="148" y="52" width="8" height="4" rx="2" fill="#999" />
-              <rect x="4" y="52" width="8" height="4" rx="2" fill="#999" />
-              {/* Underside */}
-              <rect x="10" y="58" width="140" height="4" rx="2" fill="#a93226" />
+            <svg width="200" height="88" viewBox="0 0 200 88" fill="none" xmlns="http://www.w3.org/2000/svg">
+              {/* === REAR SPOILER === */}
+              {/* Wing blade */}
+              <rect x="12" y="14" width="38" height="6" rx="2" fill="#1a1a1a" />
+              {/* Wing end plates */}
+              <rect x="12" y="14" width="4" height="11" rx="1" fill="#2a2a2a" />
+              <rect x="46" y="14" width="4" height="11" rx="1" fill="#2a2a2a" />
+              {/* Wing pillars */}
+              <rect x="22" y="20" width="4" height="16" fill="#1a1a1a" />
+              <rect x="38" y="20" width="4" height="16" fill="#1a1a1a" />
 
-              {/* Rear wheel */}
-              <g transform="translate(38,62)">
-                <circle cx="0" cy="0" r="14" fill="#222" />
-                <circle cx="0" cy="0" r="9" fill="#555" />
+              {/* === MAIN BODY — low & wide === */}
+              <path d="M18,36 L160,36 Q178,36 188,44 Q194,50 188,56 L18,56 Q10,56 10,46 Q10,36 18,36 Z" fill="#f40000" />
+
+              {/* === COCKPIT === */}
+              <path d="M70,36 Q74,16 88,14 L114,14 Q130,16 132,36 Z" fill="#f40000" />
+              {/* Windshield glass */}
+              <path d="M77,35 Q80,20 90,18 L110,18 Q122,20 125,35 Z" fill="#b0d8ef" opacity="0.88" />
+
+              {/* === DETAILS === */}
+              {/* Front headlight strip */}
+              <rect x="181" y="39" width="9" height="4" rx="2" fill="#ffe566" />
+              {/* Taillight strip */}
+              <rect x="10" y="40" width="6" height="6" rx="2" fill="#ff4444" />
+              {/* Front splitter */}
+              <rect x="180" y="56" width="20" height="3" rx="1.5" fill="#1a1a1a" />
+              {/* Rear diffuser */}
+              <path d="M10,54 L18,56 L18,60 L6,58 Z" fill="#1a1a1a" />
+              {/* Side vent */}
+              <rect x="142" y="41" width="16" height="8" rx="2" fill="#cc0000" />
+              <rect x="143" y="42" width="14" height="6" rx="1" fill="#aa0000" />
+              {/* Racing stripe */}
+              <rect x="18" y="44" width="160" height="3" rx="1" fill="#cc0000" opacity="0.5" />
+
+              {/* === REAR WHEEL === */}
+              <g transform="translate(44,68)">
+                <circle cx="0" cy="0" r="17" fill="#1a1a1a" />
+                <circle cx="0" cy="0" r="12" fill="#3a3a3a" />
                 <g className="wheel-spin">
-                  <line x1="0" y1="-9" x2="0" y2="9" stroke="#888" strokeWidth="2" />
-                  <line x1="-9" y1="0" x2="9" y2="0" stroke="#888" strokeWidth="2" />
-                  <line x1="-6.4" y1="-6.4" x2="6.4" y2="6.4" stroke="#888" strokeWidth="2" />
-                  <line x1="6.4" y1="-6.4" x2="-6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                  <line x1="0" y1="-12" x2="0" y2="12" stroke="#777" strokeWidth="2.5" />
+                  <line x1="-12" y1="0" x2="12" y2="0" stroke="#777" strokeWidth="2.5" />
+                  <line x1="-8.5" y1="-8.5" x2="8.5" y2="8.5" stroke="#777" strokeWidth="2.5" />
+                  <line x1="8.5" y1="-8.5" x2="-8.5" y2="8.5" stroke="#777" strokeWidth="2.5" />
                 </g>
-                <circle cx="0" cy="0" r="3" fill="#ccc" />
+                <circle cx="0" cy="0" r="4" fill="#999" />
               </g>
 
-              {/* Front wheel */}
-              <g transform="translate(118,62)">
-                <circle cx="0" cy="0" r="14" fill="#222" />
-                <circle cx="0" cy="0" r="9" fill="#555" />
+              {/* === FRONT WHEEL === */}
+              <g transform="translate(156,68)">
+                <circle cx="0" cy="0" r="17" fill="#1a1a1a" />
+                <circle cx="0" cy="0" r="12" fill="#3a3a3a" />
                 <g className="wheel-spin">
-                  <line x1="0" y1="-9" x2="0" y2="9" stroke="#888" strokeWidth="2" />
-                  <line x1="-9" y1="0" x2="9" y2="0" stroke="#888" strokeWidth="2" />
-                  <line x1="-6.4" y1="-6.4" x2="6.4" y2="6.4" stroke="#888" strokeWidth="2" />
-                  <line x1="6.4" y1="-6.4" x2="-6.4" y2="6.4" stroke="#888" strokeWidth="2" />
+                  <line x1="0" y1="-12" x2="0" y2="12" stroke="#777" strokeWidth="2.5" />
+                  <line x1="-12" y1="0" x2="12" y2="0" stroke="#777" strokeWidth="2.5" />
+                  <line x1="-8.5" y1="-8.5" x2="8.5" y2="8.5" stroke="#777" strokeWidth="2.5" />
+                  <line x1="8.5" y1="-8.5" x2="-8.5" y2="8.5" stroke="#777" strokeWidth="2.5" />
                 </g>
-                <circle cx="0" cy="0" r="3" fill="#ccc" />
+                <circle cx="0" cy="0" r="4" fill="#999" />
               </g>
             </svg>
           </div>
