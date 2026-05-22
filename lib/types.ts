@@ -139,6 +139,7 @@ export interface KontakttidRangeAgg {
   lead_count: number
 }
 
+
 export interface KontakttidPoint {
   month: string
   total: number

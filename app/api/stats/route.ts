@@ -2,13 +2,13 @@
 // Admin and teamleder only — returns per-rep metrics for all reps with a defined kode.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKonvPerKontakttid, getLeadsHandledRange } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKontakttidAvgMonthly, getKonvPerKontakttid, getLeadsHandledRange } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   isTeamleder,
 } from '@/lib/auth'
-import type { SaleRow, NpsRow, LeadRangeAgg, KonvPlattformRangeAgg, KontakttidRangeAgg, KonvPerKontakttidRow } from '@/lib/types'
+import type { SaleRow, NpsRow, LeadRangeAgg, KonvPlattformRangeAgg, KontakttidRangeAgg, KontakttidAvgAgg, KonvPerKontakttidRow } from '@/lib/types'
 
 function skipKode(kode: string | null | undefined): boolean {
   return kode == null || kode === '' || kode === 'zz_unknown'
@@ -33,6 +33,7 @@ export interface RepStatsEntry {
   konvPlattformRate: number | null        // plattform_count / leads (0–1), null if no leads
   sameDagPct: number | null               // share of "1. Samme dag" kontakttid category (0–1)
   kontakttidBreakdown: Record<string, number>  // category → lead_count
+  avgKontakttidDays: number | null        // average days from lead received to first contact
 }
 
 export interface StatsData {
@@ -84,6 +85,7 @@ function buildMetrics(
   reps: { kode: string; full_name: string; teamleder: string }[],
   konvPlattformAgg: KonvPlattformRangeAgg[],
   kontakttidAgg: KontakttidRangeAgg[],
+  kontakttidAvgAgg: KontakttidAvgAgg[],
   leadsHandledByName: Map<string, number>,
 ): RepStatsEntry[] {
   const periodSales = sales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
@@ -107,6 +109,22 @@ function buildMetrics(
     if (!kontakttidMap.has(k.kode)) kontakttidMap.set(k.kode, new Map())
     const catMap = kontakttidMap.get(k.kode)!
     catMap.set(k.kontakttid_kategori, (catMap.get(k.kontakttid_kategori) ?? 0) + Number(k.lead_count))
+  }
+
+  // avg kontakttid: filter monthly data to months within range, then average per rep
+  const fromYM = from.slice(0, 7)  // YYYY-MM
+  const toYM   = to.slice(0, 7)
+  const avgKontakttidMap = new Map<string, number>()
+  const avgAccum = new Map<string, { sum: number; count: number }>()
+  for (const k of kontakttidAvgAgg) {
+    if (k.month < fromYM || k.month > toYM) continue
+    const acc = avgAccum.get(k.kode) ?? { sum: 0, count: 0 }
+    acc.sum += Number(k.avg_days)
+    acc.count += 1
+    avgAccum.set(k.kode, acc)
+  }
+  for (const [kode, { sum, count }] of avgAccum) {
+    avgKontakttidMap.set(kode, sum / count)
   }
 
   return reps.map(rep => {
@@ -156,6 +174,7 @@ function buildMetrics(
     const sameDagCount = catMap?.get('1. Samme dag') ?? 0
     const sameDagPct = leadsCount === 0 ? null : sameDagCount / leadsCount
     const kontakttidBreakdown: Record<string, number> = catMap ? Object.fromEntries(catMap.entries()) : {}
+    const avgKontakttidDays = avgKontakttidMap.get(k) ?? null
 
     const leadsHandtert = leadsHandledByName.get(rep.full_name) ?? 0
 
@@ -174,6 +193,7 @@ function buildMetrics(
       konvPlattformRate,
       sameDagPct,
       kontakttidBreakdown,
+      avgKontakttidDays,
     }
   })
 }
@@ -198,7 +218,10 @@ export async function GET(request: Request) {
   const { from, to } = dateRange(mode, period)
 
   try {
-    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid, leadsHandledAgg] = await Promise.all([
+    const fromYear = parseInt(from.slice(0, 4))
+    const toYear   = parseInt(to.slice(0, 4))
+
+    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid, leadsHandledAgg, avgCur, avgPrev] = await Promise.all([
       getAllRepsWithDetails(),
       fetchYears(from, to),
       getLeadsRange(from, to),
@@ -206,14 +229,17 @@ export async function GET(request: Request) {
       getKontakttidRange(from, to).catch((e) => { console.error('[stats] kontakttidRange:', e); return [] as KontakttidRangeAgg[] }),
       getKonvPerKontakttid(from, to).catch((e) => { console.error('[stats] konvPerKontakttid:', e); return [] as KonvPerKontakttidRow[] }),
       getLeadsHandledRange(from, to).catch(() => [] as { dealeier_ik: string; count: number }[]),
+      getKontakttidAvgMonthly(fromYear).catch(() => [] as KontakttidAvgAgg[]),
+      fromYear !== toYear ? getKontakttidAvgMonthly(toYear).catch(() => [] as KontakttidAvgAgg[]) : Promise.resolve([] as KontakttidAvgAgg[]),
     ])
+    const kontakttidAvgAgg = [...avgCur, ...avgPrev]
 
     const leadsHandledByName = new Map<string, number>()
     for (const r of leadsHandledAgg) leadsHandledByName.set(r.dealeier_ik, r.count)
 
     // Only include reps with a non-empty kode (skip zz_unknown etc.)
     const activeReps = reps.filter(r => !skipKode(r.kode))
-    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg, leadsHandledByName)
+    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg, kontakttidAvgAgg, leadsHandledByName)
 
     return Response.json({ rows, konvPerKontakttid, from, to } satisfies StatsData, {
       headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' },

@@ -42,7 +42,8 @@ const MONTH_OPTIONS = buildMonthOptions()
 const fmt     = (n: number)          => Math.round(n).toLocaleString('nb-NO')
 const fmtPct  = (v: number | null)   => v === null ? '—' : `${Math.round(v * 100)}%`
 const fmtKonv = (v: number | null)   => v === null ? '—' : `${v.toLocaleString('nb-NO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
-const fmtNps  = (v: number | null)   => v === null ? '—' : Math.round(v).toLocaleString('nb-NO')
+const fmtNps     = (v: number | null)   => v === null ? '—' : Math.round(v).toLocaleString('nb-NO')
+const fmtAvgDays = (v: number | null | undefined) => v == null ? '—' : `${v.toLocaleString('nb-NO', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}d`
 
 // ─── Column definitions ───────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ interface ColDef {
   fmt: (r: RepStatsEntry) => string
   primary: boolean
   neutral?: boolean
+  styleOverride?: (value: number | null | undefined) => React.CSSProperties
 }
 
 const COLS: ColDef[] = [
@@ -61,8 +63,10 @@ const COLS: ColDef[] = [
   { key: 'fullprisPct',       label: 'Andel fullpris', fmt: r => fmtPct(r.fullprisPct),           primary: true  },
   { key: 'konvertering',      label: 'Konvertering',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
   { key: 'npsScore',          label: 'NPS',            fmt: r => fmtNps(r.npsScore),              primary: true  },
-  { key: 'konvPlattformRate', label: 'Konv plt.',      fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
-  { key: 'sameDagPct',        label: 'Kontakttid',     fmt: r => fmtPct(r.sameDagPct),            primary: false },
+  { key: 'konvPlattformRate',   label: 'Konv plt.',        fmt: r => fmtPct(r.konvPlattformRate),       primary: false },
+  { key: 'avgKontakttidDays',  label: 'Avg. kontakttid',  fmt: r => fmtAvgDays(r.avgKontakttidDays),  primary: false,
+    styleOverride: (v) => v == null ? {} : v < 1.8 ? { color: '#16a34a' } : v > 2.3 ? { color: '#dc2626' } : {} },
+  { key: 'sameDagPct',         label: 'Kontakttid',       fmt: r => fmtPct(r.sameDagPct),             primary: false },
   { key: 'leads',             label: 'Leads teller',   fmt: r => fmt(r.leads),                    primary: false },
   { key: 'leadsHandtert',    label: 'Leads håndtert', fmt: r => fmt(r.leadsHandtert),             primary: false },
   { key: 'fastprisPct',       label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
@@ -135,6 +139,7 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     fastprisPct:       fastRows.length === 0 ? null : fastRows.reduce((s, r) => s + r.fastprisPct!,       0) / fastRows.length,
     konvPlattformRate:    pltRows.length  === 0 ? null : pltRows.reduce((s, r)  => s + r.konvPlattformRate!, 0) / pltRows.length,
     sameDagPct:           ktRows.length   === 0 ? null : ktRows.reduce((s, r)   => s + r.sameDagPct!,        0) / ktRows.length,
+    avgKontakttidDays:    (() => { const r = rows.filter(r => r.avgKontakttidDays != null); return r.length === 0 ? null : r.reduce((s, r) => s + r.avgKontakttidDays!, 0) / r.length })(),
     kontakttidBreakdown:  {},
   }
 }
@@ -296,7 +301,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
                   {COLS.map(col => (
                     <td
                       key={col.key as string}
-                      style={col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
+                      style={col.styleOverride ? col.styleOverride(row[col.key] as number | null) : col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
                       className={`px-4 py-3 text-right tabular-nums ${
                         col.primary ? 'font-semibold' : 'font-normal'
                       }`}
