@@ -180,7 +180,8 @@ export default function BonusPanel({
   const displayCarsCount          = isCurrentMonth ? simEstimatedCars      : (pastBonus?.carsThisMonth ?? pastCarsCount)
   const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : (pastBonus?.konverteringsbonus ?? 0)
   const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : (pastBonus?.npsBonus ?? 0)
-  const displayTotal              = isCurrentMonth ? simTotalBonus         : (pastBonus?.totalBonus ?? pastBaseBonus)
+  const displayLqBonus            = isCurrentMonth ? (bonus.lqBonus ?? 0)  : (pastBonus?.lqBonus ?? 0)
+  const displayTotal              = isCurrentMonth ? simTotalBonus + displayLqBonus : (pastBonus?.totalBonus ?? pastBaseBonus)
 
   return (
     <section>
@@ -358,6 +359,10 @@ export default function BonusPanel({
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
           <span className="text-text-secondary">NPS-bonus (minst 10 biler)</span>
           <span className="text-text-primary">{fmtKr(displayNpsBonus)}</span>
+        </div>
+        <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
+          <span className="text-text-secondary">LQ-bonus</span>
+          <span className="text-text-primary">{fmtKr(displayLqBonus)}</span>
         </div>
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
           <span className="text-text-secondary">Annet</span>

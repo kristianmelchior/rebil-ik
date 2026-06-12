@@ -103,8 +103,12 @@ export function computeBonus(
   // Step 6 — NPS bonus lookup
   const npsBonus = npsScore === null ? 0 : lookupNpsBonus(npsScore, npsBonusTable)
 
+  // Step 6b — LQ bonus: kr 300 per LQ car
+  const lqCars = saleRows.filter(r => r.lq && r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
+  const lqBonus = lqCars * 300
+
   // Step 7 — Total and projected bonus
-  const totalBonus = bonusEtterKonvertering + npsBonus
+  const totalBonus = bonusEtterKonvertering + npsBonus + lqBonus
   const today = new Date()
   const daysElapsed = today.getDate() // 1-based current day
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
@@ -124,6 +128,7 @@ export function computeBonus(
     bonusEtterKonvertering,
     npsScore,
     npsBonus,
+    lqBonus,
     totalBonus,
     projectedBonus,
     perCarAvg,

@@ -80,6 +80,7 @@ export interface BonusResult {
   bonusEtterKonvertering: number  // = baseBonus * convFactor
   npsScore: number | null
   npsBonus: number
+  lqBonus: number                 // kr 300 × LQ cars this month
   totalBonus: number
   projectedBonus: number
   perCarAvg: number | null        // null if carsThisMonth === 0
