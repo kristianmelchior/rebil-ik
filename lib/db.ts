@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto'
 import { unstable_cache } from 'next/cache'
 import { createClient } from '@supabase/supabase-js'
-import type { Rep, SaleRow, LeadRow, NpsRow, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidRangeAgg, KonvPerKontakttidRow } from './types'
+import type { Rep, SaleRow, LeadRow, NpsRow, AvvikRow, EttersalgRow, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidRangeAgg, KonvPerKontakttidRow } from './types'
 
 // Cache TTLs (seconds)
 const TTL_SALES_DATA = 300  // 5 min — sales/leads/NPS shared across all users
@@ -532,4 +532,32 @@ export async function getLeadTildeling(from: string, to: string): Promise<{ name
   const { data, error } = await supabase.rpc('get_lead_tildeling', { p_from: from, p_to: to })
   if (error) throw error
   return (data ?? []) as { name: string; teamleder: string; tildelt: number; mistet: number }[]
+}
+
+// Fetch all avvik rows for a rep in a given year.
+// Input: kode (rep UUID), year (number)  Output: AvvikRow[]
+export async function getAvvikByKode(kode: string, year: number): Promise<AvvikRow[]> {
+  return fetchAll<AvvikRow>((from, to) =>
+    supabase
+      .from('avvik')
+      .select('*')
+      .eq('kode', kode)
+      .gte('dato', `${year}-01-01`)
+      .lte('dato', `${year}-12-31`)
+      .range(from, to)
+  )
+}
+
+// Fetch all ettersalg rows for a rep in a given year.
+// Input: kode (rep UUID), year (number)  Output: EttersalgRow[]
+export async function getEttersalgByKode(kode: string, year: number): Promise<EttersalgRow[]> {
+  return fetchAll<EttersalgRow>((from, to) =>
+    supabase
+      .from('ettersalg')
+      .select('*')
+      .eq('kode', kode)
+      .gte('dato', `${year}-01-01`)
+      .lte('dato', `${year}-12-31`)
+      .range(from, to)
+  )
 }

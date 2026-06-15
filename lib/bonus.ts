@@ -1,7 +1,7 @@
 // Bonus calculation — steps 1–8. Pure functions, no side effects.
 // Never change a formula. Flag if anything looks wrong.
 
-import type { Rep, SaleRow, NpsRow, BonusResult, ConversionFactorRow, NpsBonusRow } from './types'
+import type { Rep, SaleRow, NpsRow, AvvikRow, EttersalgRow, BonusResult, ConversionFactorRow, NpsBonusRow } from './types'
 import { CONVERSION_FACTORS, TIER_COL_INDEX } from '@/config/conversionFactors'
 import { NPS_BONUS } from '@/config/npsBonus'
 
@@ -75,7 +75,9 @@ export function computeBonus(
   leadCount: number,
   npsRows: NpsRow[],
   convFactors?: ConversionFactorRow[],
-  npsBonusTable?: NpsBonusRow[]
+  npsBonusTable?: NpsBonusRow[],
+  avvikRows?: AvvikRow[],
+  ettersalgRows?: EttersalgRow[]
 ): BonusResult {
   // Step 1 — Base bonus: SUM(bonus) for all rows (null → 0; Avslått rows included)
   const baseBonus = saleRows.reduce((sum, r) => sum + (r.bonus ?? 0), 0)
@@ -107,8 +109,14 @@ export function computeBonus(
   const lqCars = saleRows.filter(r => r.lq && r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
   const lqBonus = lqCars * 300
 
+  // Step 6c — Avvik deduction: kr 100 per avvik (rows already filtered to this month)
+  const avvikDeduction = (avvikRows?.length ?? 0) * 100
+
+  // Step 6d — Ettersalg deduction: kr 500 per endelig avgjort ettersalg
+  const ettersalgDeduction = (ettersalgRows?.filter(r => r.endelig_avgjort).length ?? 0) * 500
+
   // Step 7 — Total and projected bonus
-  const totalBonus = bonusEtterKonvertering + npsBonus + lqBonus
+  const totalBonus = bonusEtterKonvertering + npsBonus + lqBonus - avvikDeduction - ettersalgDeduction
   const today = new Date()
   const daysElapsed = today.getDate() // 1-based current day
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
@@ -129,6 +137,8 @@ export function computeBonus(
     npsScore,
     npsBonus,
     lqBonus,
+    avvikDeduction,
+    ettersalgDeduction,
     totalBonus,
     projectedBonus,
     perCarAvg,

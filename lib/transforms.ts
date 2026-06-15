@@ -1,7 +1,7 @@
 // Pure transform functions — no Supabase imports, no side effects.
 // Converts raw DB rows into typed metrics and assembles the RepDashboard payload.
 
-import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint, KontakttidRangeAgg, ConversionFactorRow, NpsBonusRow } from './types'
+import type { SaleRow, NpsRow, Rep, PeriodMetrics, RepDashboard, PrisDistPoint, FordDistPoint, LeadMonthlyAgg, LeadRangeAgg, KonvPlattformAgg, KonvPlattformPoint, KonvPlattformRangeAgg, KontakttidAgg, KontakttidAvgAgg, KontakttidPoint, KontakttidRangeAgg, ConversionFactorRow, NpsBonusRow, AvvikRow, EttersalgRow } from './types'
 import { computeBonus } from './bonus'
 
 // Filter rows to those matching a specific rep kode.
@@ -343,7 +343,9 @@ export function buildDashboard(
   kontakttidAvgMonthly: KontakttidAvgAgg[],
   kontakttidRange30: KontakttidRangeAgg[],
   convFactors: ConversionFactorRow[] = [],
-  npsBonusTable: NpsBonusRow[] = []
+  npsBonusTable: NpsBonusRow[] = [],
+  avvik: AvvikRow[] = [],
+  ettersalg: EttersalgRow[] = []
 ): Omit<RepDashboard, 'leadsHandledKategoriTrend'> {
   const today = new Date()
   const year  = today.getFullYear()
@@ -393,9 +395,11 @@ export function buildDashboard(
   const bonusByMonth: Record<string, ReturnType<typeof computeBonus>> = {}
   for (const ym of Object.keys(salesByMonth)) {
     if (ym === currentMonthKey) continue
-    const ymLeadCount = repLeadMonthly.filter(r => r.month === ym).reduce((s, r) => s + Number(r.teller_true), 0)
-    const ymNpsRows   = filterByDateRange(repNps, 'submitted_at', `${ym}-01`, `${ym}-31`)
-    bonusByMonth[ym]  = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows, convFactors, npsBonusTable)
+    const ymLeadCount  = repLeadMonthly.filter(r => r.month === ym).reduce((s, r) => s + Number(r.teller_true), 0)
+    const ymNpsRows    = filterByDateRange(repNps, 'submitted_at', `${ym}-01`, `${ym}-31`)
+    const ymAvvik      = avvik.filter(r => r.dato.startsWith(ym))
+    const ymEttersalg  = ettersalg.filter(r => r.dato.startsWith(ym))
+    bonusByMonth[ym]   = computeBonus(rep, salesByMonth[ym], ymLeadCount, ymNpsRows, convFactors, npsBonusTable, ymAvvik, ymEttersalg)
   }
 
   return {
@@ -406,9 +410,13 @@ export function buildDashboard(
     medianLast30Days:    computeTeamMedian(allSales, last30LeadMap, last30LeadTotalMap, allNps, last30Start, todayStr),
     trend:               buildTrend(repSales, repLeadMonthly, repNps, year),
     medianTrend:         buildMedianTrend(allSales, leadMonthly, allNps, year),
-    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth, convFactors, npsBonusTable),
+    bonus:               computeBonus(rep, repSalesMonth, repMonthLeadCount, repNpsMonth, convFactors, npsBonusTable,
+                           avvik.filter(r => r.dato.startsWith(currentMonthKey)),
+                           ettersalg.filter(r => r.dato.startsWith(currentMonthKey))),
     conversionFactors:   convFactors,
     npsBonus:            npsBonusTable,
+    avvik,
+    ettersalg,
     bonusByMonth,
     salesThisMonth:      salesByMonth[currentMonthKey] ?? [],
     salesLast30Days:     repSales30,

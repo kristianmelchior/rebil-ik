@@ -14,6 +14,7 @@ import { buildPrisSlices } from '@/components/BreakdownTile'
 import BonusPanel from '@/components/BonusPanel'
 import FeedTab from '@/components/FeedTab'
 import NpsTab from '@/components/NpsTab'
+import TrekkTab from '@/components/TrekkTab'
 import ToplistTab from '@/components/ToplistTab'
 import StatsTab from '@/components/StatsTab'
 import RatingPreviewPopup from '@/components/RatingPreviewPopup'
@@ -50,7 +51,7 @@ export default function Page() {
   const [loading,       setLoading]       = useState(true)
   const [error,         setError]         = useState<string | boolean>(false)
   const [selectedMonth, setSelectedMonth] = useState('')
-  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'toplist' | 'feed' | 'nps' | 'stats'>('dashboard')
+  const [activeTab,     setActiveTab]     = useState<'dashboard' | 'toplist' | 'feed' | 'nps' | 'trekk' | 'stats'>('dashboard')
   const [period,        setPeriod]        = useState<'month' | '30d'>('30d')
   const [feedSales,     setFeedSales]     = useState<SaleRow[]>([])
   const [hasUnread,     setHasUnread]     = useState(false)
@@ -394,6 +395,17 @@ export default function Page() {
           >
             NPS
           </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('trekk')}
+            className={
+              activeTab === 'trekk'
+                ? 'text-text-primary border-b-2 border-[var(--rebil-red)] py-3.5 mr-7 text-sm font-medium'
+                : tabBtn
+            }
+          >
+            Trekk
+          </button>
 
           {/* Se stats — admin/teamleder only, pushed to the right */}
           {(data.admin || data.teamView) && (
@@ -465,6 +477,11 @@ export default function Page() {
       {activeTab === 'nps' && (
         <main className={`${shell} py-8`}>
           <NpsTab rows={npsRows} />
+        </main>
+      )}
+      {activeTab === 'trekk' && (
+        <main className={`${shell} py-8`}>
+          <TrekkTab avvik={data.avvik ?? []} ettersalg={data.ettersalg ?? []} repName={data.rep.full_name} />
         </main>
       )}
       {activeTab === 'stats' && (data.admin || data.teamView) && (

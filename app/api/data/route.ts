@@ -17,6 +17,8 @@ import {
   getLeadsHandledMonthlyByKategori,
   getConversionFactors,
   getNpsBonusTable,
+  getAvvikByKode,
+  getEttersalgByKode,
 } from '@/lib/db'
 import type { LeadsHandledKategoriPoint } from '@/lib/types'
 import { buildDashboard } from '@/lib/transforms'
@@ -82,7 +84,7 @@ export async function GET() {
     ])
 
     // Graceful fallback — returns empty arrays until SQL functions are deployed
-    const [konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, leadsHandledKategoriRaw, convFactors, npsBonusTable] = await Promise.all([
+    const [konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, leadsHandledKategoriRaw, convFactors, npsBonusTable, avvik, ettersalg] = await Promise.all([
       getKonvPlattformMonthly(year).catch(() => []),
       getKonvPlattformRange(last30Start, todayStr).catch(() => []),
       getKontakttidMonthly(year).catch(() => []),
@@ -91,6 +93,8 @@ export async function GET() {
       getLeadsHandledMonthlyByKategori(rep.full_name, year).catch(() => []),
       getConversionFactors().catch(() => []),
       getNpsBonusTable().catch(() => []),
+      getAvvikByKode(rep.kode, year).catch(() => []),
+      getEttersalgByKode(rep.kode, year).catch(() => []),
     ])
 
     // Process leads-handled-by-kategori into per-month points
@@ -107,7 +111,7 @@ export async function GET() {
         total: Object.values(categories).reduce((s, v) => s + v, 0),
       }))
 
-    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, convFactors, npsBonusTable)
+    const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, convFactors, npsBonusTable, avvik, ettersalg)
 
     const dashboardWithKategori = { ...dashboard, leadsHandledKategoriTrend }
 

@@ -47,6 +47,29 @@ export interface NpsRow {
   svar?: string | null         // free-text survey response
 }
 
+// Raw row from public.avvik
+export interface AvvikRow {
+  record_id:      string
+  kode:           string
+  dato:           string        // 'YYYY-MM-DD'
+  avvik_type:     string | null
+  avvik_komment:  string | null
+  merke:          string | null
+  modell:         string | null
+  regnr:          string | null
+}
+
+// Raw row from public.ettersalg
+export interface EttersalgRow {
+  record_id:        string
+  kode:             string
+  dato:             string        // 'YYYY-MM-DD'
+  kostnad:          number
+  fakturert_selger: number        // «Ettersalg skal fakturere selger»
+  regnr:            string | null
+  endelig_avgjort:  boolean
+}
+
 // Row from public.reps
 export interface Rep {
   kode: string                 // PK — session cookie (httpOnly), set at login
@@ -81,6 +104,8 @@ export interface BonusResult {
   npsScore: number | null
   npsBonus: number
   lqBonus: number                 // kr 300 × LQ cars this month
+  avvikDeduction: number          // kr 100 × avvik this month
+  ettersalgDeduction: number      // kr 500 × ettersalg (endelig avgjort) this month
   totalBonus: number
   projectedBonus: number
   perCarAvg: number | null        // null if carsThisMonth === 0
@@ -194,6 +219,8 @@ export interface RepDashboard {
   lastUpdated: string
   conversionFactors: ConversionFactorRow[]
   npsBonus: NpsBonusRow[]
+  avvik:     AvvikRow[]
+  ettersalg: EttersalgRow[]
   admin?: AdminDashboardMeta
   teamView?: TeamlederDashboardMeta
 }
