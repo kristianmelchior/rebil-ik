@@ -180,11 +180,10 @@ export default function BonusPanel({
   const displayCarsCount          = isCurrentMonth ? simEstimatedCars      : (pastBonus?.carsThisMonth ?? pastCarsCount)
   const displayKonverteringsbonus = isCurrentMonth ? simKonverteringsbonus : (pastBonus?.konverteringsbonus ?? 0)
   const displayNpsBonus           = isCurrentMonth ? simNpsBonus           : (pastBonus?.npsBonus ?? 0)
-  const displayLqBonus            = isCurrentMonth ? (bonus.lqBonus ?? 0)  : (pastBonus?.lqBonus ?? 0)
   const displayAvvikDeduction     = isCurrentMonth ? (bonus.avvikDeduction ?? 0)     : (pastBonus?.avvikDeduction ?? 0)
   const displayEttersalgDeduction = isCurrentMonth ? (bonus.ettersalgDeduction ?? 0) : (pastBonus?.ettersalgDeduction ?? 0)
   const displayTotal              = isCurrentMonth
-    ? simTotalBonus + displayLqBonus - displayAvvikDeduction - displayEttersalgDeduction
+    ? simTotalBonus - displayAvvikDeduction - displayEttersalgDeduction
     : (pastBonus?.totalBonus ?? pastBaseBonus)
 
   return (
@@ -363,10 +362,6 @@ export default function BonusPanel({
         <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
           <span className="text-text-secondary">NPS-bonus (minst 10 biler)</span>
           <span className="text-text-primary">{fmtKr(displayNpsBonus)}</span>
-        </div>
-        <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
-          <span className="text-text-secondary">LQ-bonus</span>
-          <span className="text-text-primary">{fmtKr(displayLqBonus)}</span>
         </div>
         {displayAvvikDeduction > 0 && (
           <div className="flex justify-between py-2.5 border-b border-[#F0F0F0] text-sm">
