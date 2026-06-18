@@ -105,10 +105,6 @@ export function computeBonus(
   // Step 6 — NPS bonus lookup
   const npsBonus = npsScore === null ? 0 : lookupNpsBonus(npsScore, npsBonusTable)
 
-  // Step 6b — LQ bonus: kr 300 per LQ car
-  const lqCars = saleRows.filter(r => r.lq && r.biler > 0).reduce((sum, r) => sum + r.biler, 0)
-  const lqBonus = lqCars * 300
-
   // Step 6c — Avvik deduction: kr 100 per avvik (rows already filtered to this month)
   const avvikDeduction = (avvikRows?.length ?? 0) * 100
 
@@ -116,7 +112,8 @@ export function computeBonus(
   const ettersalgDeduction = (ettersalgRows?.filter(r => r.endelig_avgjort).length ?? 0) * 500
 
   // Step 7 — Total and projected bonus
-  const totalBonus = bonusEtterKonvertering + npsBonus + lqBonus - avvikDeduction - ettersalgDeduction
+  // Note: LQ bonus is already included in r.bonus (stykkbonus) per car — do not add separately
+  const totalBonus = bonusEtterKonvertering + npsBonus - avvikDeduction - ettersalgDeduction
   const today = new Date()
   const daysElapsed = today.getDate() // 1-based current day
   const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
@@ -136,7 +133,6 @@ export function computeBonus(
     bonusEtterKonvertering,
     npsScore,
     npsBonus,
-    lqBonus,
     avvikDeduction,
     ettersalgDeduction,
     totalBonus,

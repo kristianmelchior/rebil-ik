@@ -103,7 +103,6 @@ export interface BonusResult {
   bonusEtterKonvertering: number  // = baseBonus * convFactor
   npsScore: number | null
   npsBonus: number
-  lqBonus: number                 // kr 300 × LQ cars this month
   avvikDeduction: number          // kr 100 × avvik this month
   ettersalgDeduction: number      // kr 500 × ettersalg (endelig avgjort) this month
   totalBonus: number
