@@ -27,6 +27,7 @@ export interface RepStatsEntry {
   leads: number
   leadsHandtert: number
   konvertering: number | null
+  konverteringHandtert: number | null
   npsScore: number | null
   fullprisPct: number | null
   fastprisPct: number | null
@@ -139,6 +140,8 @@ function buildMetrics(
 
     // konvertering
     const konvertering = leadsCount === 0 ? null : (bilerKjopt / leadsCount) * 100
+    const leadsHandtert = leadsHandledByName.get(rep.full_name) ?? 0
+    const konverteringHandtert = leadsHandtert === 0 ? null : (bilerKjopt / leadsHandtert) * 100
 
     // NPS
     const repNps = periodNps.filter(n => n.kode === k)
@@ -176,8 +179,6 @@ function buildMetrics(
     const kontakttidBreakdown: Record<string, number> = catMap ? Object.fromEntries(catMap.entries()) : {}
     const avgKontakttidDays = avgKontakttidMap.get(k) ?? null
 
-    const leadsHandtert = leadsHandledByName.get(rep.full_name) ?? 0
-
     return {
       kode: k,
       rep_name: rep.full_name,
@@ -187,6 +188,7 @@ function buildMetrics(
       leads: leadsCount,
       leadsHandtert,
       konvertering,
+      konverteringHandtert,
       npsScore,
       fullprisPct,
       fastprisPct,
