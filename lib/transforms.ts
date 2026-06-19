@@ -450,6 +450,9 @@ export function buildDashboard(
       const count = repRow ? Number(repRow.plattform_count) : 0
       return { rate: repLast30LeadTotal > 0 ? count / repLast30LeadTotal : null, count }
     })(),
-    lastUpdated:         new Date().toISOString(),
+    plattformLeadIdsMonth:   [],  // populated in /api/data after buildDashboard
+    plattformLeadIds30d:     [],  // populated in /api/data after buildDashboard
+    plattformLeadIdsByMonth: {},  // populated in /api/data after buildDashboard
+    lastUpdated: new Date().toISOString(),
   }
 }

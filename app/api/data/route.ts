@@ -19,6 +19,8 @@ import {
   getNpsBonusTable,
   getAvvikByKode,
   getEttersalgByKode,
+  getPlattformLeadIds,
+  getPlattformLeadIdsByMonth,
 } from '@/lib/db'
 import type { LeadsHandledKategoriPoint } from '@/lib/types'
 import { buildDashboard } from '@/lib/transforms'
@@ -113,7 +115,16 @@ export async function GET() {
 
     const dashboard = buildDashboard(rep, allSales, leadMonthly, leadRange30, allNps, konvPlattformMonthly, konvPlattformRange30, kontakttidMonthly, kontakttidAvgMonthly, kontakttidRange30, convFactors, npsBonusTable, avvik, ettersalg)
 
-    const dashboardWithKategori = { ...dashboard, leadsHandledKategoriTrend }
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const monthStart = `${year}-${month}-01`
+
+    const [plattformLeadIdsMonth, plattformLeadIds30d, plattformLeadIdsByMonth] = await Promise.all([
+      getPlattformLeadIds(rep.kode, monthStart, todayStr).catch(() => [] as string[]),
+      getPlattformLeadIds(rep.kode, last30Start, todayStr).catch(() => [] as string[]),
+      getPlattformLeadIdsByMonth(rep.kode, year).catch(() => ({} as Record<string, string[]>)),
+    ])
+
+    const dashboardWithKategori = { ...dashboard, leadsHandledKategoriTrend, plattformLeadIdsMonth, plattformLeadIds30d, plattformLeadIdsByMonth }
 
     if (isAdmin) {
       const reps = await getAllRepsForPicker()

@@ -19,6 +19,7 @@ export interface SaleRow {
   prisgrense: string | null    // 'Pris' | 'Rabatt 1' | 'Rabatt 2' | 'Minstepris' | null
   bonussats?: number           // legacy column (not used in UI / bonus math)
   bonus: number | null         // bonus NOK per row — Bonusbidrag & base bonus sum
+  innkjopstype: string | null  // e.g. 'b2b_scrap', 'b2b_fixedprice', 'b2b_remotecomm'
 }
 
 // Raw row from public.leads
@@ -215,6 +216,9 @@ export interface RepDashboard {
   last30SameDagPct:       number | null
   currentMonthKonvPlattform: { rate: number | null; count: number }
   last30KonvPlattform:       { rate: number | null; count: number }
+  plattformLeadIdsMonth:   string[]                 // hs_object_ids of leads with dato_lagt_i_plattform in current month
+  plattformLeadIds30d:     string[]                 // same for last 30 days
+  plattformLeadIdsByMonth: Record<string, string[]> // keyed by 'YYYY-MM' — for historical chart dedup
   lastUpdated: string
   conversionFactors: ConversionFactorRow[]
   npsBonus: NpsBonusRow[]

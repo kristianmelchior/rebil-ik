@@ -9,7 +9,6 @@ import type { RepDashboard, SaleRow, NpsRow } from '@/lib/types'
 import AuthGate from '@/components/AuthGate'
 import KpiTiles from '@/components/KpiTiles'
 import TrendCharts from '@/components/TrendCharts'
-import InsightTiles from '@/components/InsightTiles'
 import { buildPrisSlices } from '@/components/BreakdownTile'
 import BonusPanel from '@/components/BonusPanel'
 import FeedTab from '@/components/FeedTab'
@@ -427,17 +426,17 @@ export default function Page() {
             period={period}
             onPeriodChange={setPeriod}
             prisSlices={prisSlices}
-          />
-          <InsightTiles
-            period={period}
             salesThisMonth={data.salesThisMonth}
             salesLast30Days={data.salesLast30Days}
-            leads={metrics.leads}
-            leadsTotal={metrics.leadsTotal}
             currentMonthKonvPlattform={data.currentMonthKonvPlattform}
             last30KonvPlattform={data.last30KonvPlattform}
             currentMonthSameDagPct={data.currentMonthSameDagPct}
             last30SameDagPct={data.last30SameDagPct}
+            salesByMonth={data.salesByMonth}
+            konvPlattformTrend={data.konvPlattformTrend}
+            plattformLeadIdsMonth={data.plattformLeadIdsMonth ?? []}
+            plattformLeadIds30d={data.plattformLeadIds30d ?? []}
+            plattformLeadIdsByMonth={data.plattformLeadIdsByMonth ?? {}}
           />
           <RepPipelineWidget />
           <TrendCharts

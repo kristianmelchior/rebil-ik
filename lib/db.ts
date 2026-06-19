@@ -548,6 +548,49 @@ export async function getAvvikByKode(kode: string, year: number): Promise<AvvikR
   )
 }
 
+
+// Fetch hs_object_ids of plattform leads for a full year, grouped by month.
+// Used for historical cross-source dedup in the innkjøpskanaler chart.
+// Input: kode (rep), year (number)  Output: Record<'YYYY-MM', string[]>
+export async function getPlattformLeadIdsByMonth(kode: string, year: number): Promise<Record<string, string[]>> {
+  const client = feedSocialClient()
+  const rows = await fetchAll<{ hs_object_id: string; dato_lagt_i_plattform: string }>((from, to) =>
+    client
+      .from('leads')
+      .select('hs_object_id, dato_lagt_i_plattform')
+      .eq('kode', kode)
+      .gte('dato_lagt_i_plattform', `${year}-01-01`)
+      .lte('dato_lagt_i_plattform', `${year}-12-31`)
+      .not('hs_object_id', 'is', null)
+      .range(from, to)
+  )
+  const result: Record<string, string[]> = {}
+  for (const row of rows) {
+    const month = String(row.dato_lagt_i_plattform).slice(0, 7) // 'YYYY-MM'
+    if (!result[month]) result[month] = []
+    result[month].push(row.hs_object_id)
+  }
+  return result
+}
+
+// Fetch hs_object_ids of leads put on platform within a date range for a rep.
+// Used for cross-source deduplication: match against sales.hs_deal_id.
+// Uses service-role client to bypass RLS — leads table blocks direct SELECT for anon key.
+// Input: kode (rep), from/to (YYYY-MM-DD)  Output: string[] of hs_object_ids
+export async function getPlattformLeadIds(kode: string, from: string, to: string): Promise<string[]> {
+  const client = feedSocialClient()
+  return fetchAll<{ hs_object_id: string }>((rangeFrom, rangeTo) =>
+    client
+      .from('leads')
+      .select('hs_object_id')
+      .eq('kode', kode)
+      .gte('dato_lagt_i_plattform', from)
+      .lte('dato_lagt_i_plattform', to)
+      .not('hs_object_id', 'is', null)
+      .range(rangeFrom, rangeTo)
+  ).then(rows => rows.map(r => r.hs_object_id).filter(Boolean))
+}
+
 // Fetch all ettersalg rows for a rep in a given year.
 // Input: kode (rep UUID), year (number)  Output: EttersalgRow[]
 export async function getEttersalgByKode(kode: string, year: number): Promise<EttersalgRow[]> {
