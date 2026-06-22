@@ -58,18 +58,21 @@ interface ColDef {
   styleOverride?: (value: number | null | undefined) => React.CSSProperties
 }
 
-const COLS: ColDef[] = [
+// Detail columns shown when "Netto videre" is expanded
+const VIDERE_DETAIL_KEYS = new Set(['kommisjon', 'fjernkommisjon', 'salgshjelp', 'vrakbiler', 'plattformCount'])
+
+const ALL_COLS: ColDef[] = [
   { key: 'bilerKjopt',          label: 'Biler kjøpt',      fmt: r => fmt(r.bilerKjopt),               primary: true  },
-  { key: 'fullprisPct',         label: 'Andel fullpris',   fmt: r => fmtPct(r.fullprisPct),           primary: true  },
-  { key: 'konvertering',        label: 'Konv. (teller)',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
-  { key: 'konverteringHandtert',label: 'Konv. (håndtert)', fmt: r => fmtKonv(r.konverteringHandtert), primary: true  },
-  { key: 'npsScore',            label: 'NPS',              fmt: r => fmtNps(r.npsScore),              primary: true  },
   { key: 'nettoAntallVidere',   label: 'Netto videre',     fmt: r => fmt(r.nettoAntallVidere),        primary: true  },
   { key: 'kommisjon',           label: 'Kommisjon',        fmt: r => fmt(r.kommisjon),                primary: false },
   { key: 'fjernkommisjon',      label: 'Fjernkom.',        fmt: r => fmt(r.fjernkommisjon),           primary: false },
   { key: 'salgshjelp',          label: 'Salgshjelp',       fmt: r => fmt(r.salgshjelp),               primary: false },
   { key: 'vrakbiler',           label: 'Vrakbiler',        fmt: r => fmt(r.vrakbiler),                primary: false },
   { key: 'plattformCount',      label: 'Til plattform',    fmt: r => fmt(r.plattformCount),           primary: false },
+  { key: 'fullprisPct',         label: 'Andel fullpris',   fmt: r => fmtPct(r.fullprisPct),           primary: true  },
+  { key: 'konvertering',        label: 'Konv. (teller)',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
+  { key: 'konverteringHandtert',label: 'Konv. (håndtert)', fmt: r => fmtKonv(r.konverteringHandtert), primary: true  },
+  { key: 'npsScore',            label: 'NPS',              fmt: r => fmtNps(r.npsScore),              primary: true  },
   { key: 'konvPlattformRate',   label: 'Konv plt.',        fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
   { key: 'avgKontakttidDays',   label: 'Avg. kontakttid',  fmt: r => fmtAvgDays(r.avgKontakttidDays), primary: false,
     styleOverride: (v) => v == null ? {} : v < 1.8 ? { color: '#16a34a' } : v > 2.3 ? { color: '#dc2626' } : {} },
@@ -170,13 +173,16 @@ function SortIcon({ active, dir }: { active: boolean; dir: 'asc' | 'desc' }) {
 type Mode = 'month' | '30d' | 'custom'
 
 export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string }) {
-  const [mode,      setMode]      = useState<Mode>('month')
-  const [period,    setPeriod]    = useState(MONTH_OPTIONS[0]?.value ?? '')
-  const [data,      setData]      = useState<StatsData | null>(null)
-  const [loading,   setLoading]   = useState(true)
-  const [sortKey,   setSortKey]   = useState<SortKey>('bilerKjopt')
-  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('desc')
-  const [tlFilter,  setTlFilter]  = useState<string>(defaultTlFilter ?? '__all__')
+  const [mode,              setMode]              = useState<Mode>('month')
+  const [period,            setPeriod]            = useState(MONTH_OPTIONS[0]?.value ?? '')
+  const [data,              setData]              = useState<StatsData | null>(null)
+  const [loading,           setLoading]           = useState(true)
+  const [sortKey,           setSortKey]           = useState<SortKey>('bilerKjopt')
+  const [sortDir,           setSortDir]           = useState<'asc' | 'desc'>('desc')
+  const [tlFilter,          setTlFilter]          = useState<string>(defaultTlFilter ?? '__all__')
+  const [showVidereDetails, setShowVidereDetails] = useState(false)
+
+  const visibleCols = ALL_COLS.filter(c => showVidereDetails || !VIDERE_DETAIL_KEYS.has(c.key as string))
 
   useEffect(() => {
     setLoading(true)
@@ -273,16 +279,36 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
               >
                 Selger <SortIcon active={sortKey === 'rep_name'} dir={sortDir} />
               </th>
-              {COLS.map(col => (
-                <th
-                  key={col.key as string}
-                  onClick={() => handleSort(col.key)}
-                  className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-text-primary ${
-                    col.primary ? 'font-semibold text-text-primary' : 'font-medium text-text-muted'
-                  }`}
-                >
-                  {col.label} <SortIcon active={sortKey === col.key} dir={sortDir} />
-                </th>
+              {visibleCols.map(col => (
+                col.key === 'nettoAntallVidere' ? (
+                  <th
+                    key={col.key as string}
+                    className="px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap select-none font-semibold text-text-primary"
+                  >
+                    <span
+                      onClick={() => setShowVidereDetails(v => !v)}
+                      className="inline-flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
+                      title={showVidereDetails ? 'Skjul detaljer' : 'Vis detaljer'}
+                    >
+                      {col.label}
+                      <span className={`inline-block transition-transform duration-200 ${showVidereDetails ? 'rotate-180' : ''}`}>▾</span>
+                    </span>
+                    {' '}
+                    <span onClick={() => handleSort(col.key)} className="cursor-pointer hover:opacity-70 transition-opacity">
+                      <SortIcon active={sortKey === col.key} dir={sortDir} />
+                    </span>
+                  </th>
+                ) : (
+                  <th
+                    key={col.key as string}
+                    onClick={() => handleSort(col.key)}
+                    className={`px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap cursor-pointer select-none hover:text-text-primary ${
+                      col.primary ? 'font-semibold text-text-primary' : 'font-medium text-text-muted'
+                    }`}
+                  >
+                    {col.label} <SortIcon active={sortKey === col.key} dir={sortDir} />
+                  </th>
+                )
               ))}
             </tr>
           </thead>
@@ -291,7 +317,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className={`border-b border-border last:border-0 ${i % 2 !== 0 ? 'bg-bg' : ''}`}>
                   <td className={`sticky left-0 z-10 px-4 py-3 after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border ${i % 2 !== 0 ? 'bg-bg' : 'bg-surface'}`}><div className="h-4 w-36 bg-border rounded animate-pulse" /></td>
-                  {COLS.map((_, j) => (
+                  {visibleCols.map((_, j) => (
                     <td key={j} className="px-4 py-3"><div className="h-4 w-10 bg-border rounded animate-pulse ml-auto" /></td>
                   ))}
                 </tr>
@@ -312,7 +338,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
                       </span>
                     )}
                   </td>
-                  {COLS.map(col => (
+                  {visibleCols.map(col => (
                     <td
                       key={col.key as string}
                       style={col.styleOverride ? col.styleOverride(row[col.key] as number | null) : col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
@@ -333,7 +359,7 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
             <tfoot>
               <tr className="border-t-2 border-border bg-bg">
                 <td className="sticky left-0 z-10 bg-bg px-4 py-3 text-sm font-semibold text-text-primary after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border">Total</td>
-                {COLS.map(col => (
+                {visibleCols.map(col => (
                   <td
                     key={col.key as string}
                     className={`px-4 py-3 text-right tabular-nums font-semibold ${
