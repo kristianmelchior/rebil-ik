@@ -591,6 +591,32 @@ export async function getPlattformLeadIds(kode: string, from: string, to: string
   ).then(rows => rows.map(r => r.hs_object_id).filter(Boolean))
 }
 
+// Fetch all plattform lead IDs for all reps in a date range, grouped by kode.
+// Used in stats API for "konvertering fra plattform" — how many plattform leads
+// resulted in an actual sale (hs_object_id matches sales.hs_deal_id).
+// Uses service-role client to bypass RLS.
+// Input: from/to (YYYY-MM-DD)  Output: Record<kode, string[]>
+export async function getPlattformLeadIdsByKode(from: string, to: string): Promise<Record<string, string[]>> {
+  const client = feedSocialClient()
+  const rows = await fetchAll<{ hs_object_id: string; kode: string }>((rangeFrom, rangeTo) =>
+    client
+      .from('leads')
+      .select('hs_object_id, kode')
+      .gte('dato_lagt_i_plattform', from)
+      .lte('dato_lagt_i_plattform', to)
+      .not('hs_object_id', 'is', null)
+      .not('kode', 'is', null)
+      .range(rangeFrom, rangeTo)
+  )
+  const result: Record<string, string[]> = {}
+  for (const row of rows) {
+    if (!row.kode) continue
+    if (!result[row.kode]) result[row.kode] = []
+    result[row.kode].push(row.hs_object_id)
+  }
+  return result
+}
+
 // Fetch all ettersalg rows for a rep in a given year.
 // Input: kode (rep UUID), year (number)  Output: EttersalgRow[]
 export async function getEttersalgByKode(kode: string, year: number): Promise<EttersalgRow[]> {

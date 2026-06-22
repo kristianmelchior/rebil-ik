@@ -36,12 +36,15 @@ export interface RepStatsEntry {
   kontakttidBreakdown: Record<string, number>  // category → lead_count
   avgKontakttidDays: number | null        // average days from lead received to first contact
   // Antall videre breakdown
-  kommisjon:         number
-  fjernkommisjon:    number
-  salgshjelp:        number
-  vrakbiler:         number
-  plattformCount:    number
-  nettoAntallVidere: number               // salesNetto (dedup by hs_deal_id) + plattformCount
+  kommisjon:           number
+  fjernkommisjon:      number
+  salgshjelp:          number
+  vrakbiler:           number
+  plattformCount:      number
+  nettoAntallVidere:   number               // salesNetto (dedup by hs_deal_id) + plattformCount
+  // Konvertering fra plattform: alle kjøpte biler / antall lagt i plattform
+  // B2B og Retail går alltid gjennom plattform; Kommisjon/Fjernkom/Vrak/Salgshjelp delvis.
+  konvFraPlattform:    number | null        // bilerKjøpt / plattformCount (null if 0 plattform leads)
 }
 
 export interface StatsData {
@@ -197,6 +200,9 @@ function buildMetrics(
     const salesNetto      = [...salesNettoMap.values()].reduce((sum, b) => sum + b, 0)
     const nettoAntallVidere = salesNetto + plattformCount
 
+    // Konvertering fra plattform: bilerKjøpt / plattformCount
+    const konvFraPlattform = plattformCount === 0 ? null : bilerKjopt / plattformCount
+
     const catMap = kontakttidMap.get(k)
     const sameDagCount = catMap?.get('1. Samme dag') ?? 0
     const sameDagPct = leadsCount === 0 ? null : sameDagCount / leadsCount
@@ -226,6 +232,7 @@ function buildMetrics(
       vrakbiler,
       plattformCount,
       nettoAntallVidere,
+      konvFraPlattform,
     }
   })
 }

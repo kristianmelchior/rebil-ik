@@ -73,7 +73,8 @@ const ALL_COLS: ColDef[] = [
   { key: 'konvertering',        label: 'Konv. (teller)',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
   { key: 'konverteringHandtert',label: 'Konv. (håndtert)', fmt: r => fmtKonv(r.konverteringHandtert), primary: true  },
   { key: 'npsScore',            label: 'NPS',              fmt: r => fmtNps(r.npsScore),              primary: true  },
-  { key: 'konvPlattformRate',   label: 'Konv plt.',        fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
+  { key: 'konvPlattformRate',   label: 'Konv. til plt.',   fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
+  { key: 'konvFraPlattform',    label: 'Konv. fra plt.',   fmt: r => fmtPct(r.konvFraPlattform),      primary: false },
   { key: 'avgKontakttidDays',   label: 'Avg. kontakttid',  fmt: r => fmtAvgDays(r.avgKontakttidDays), primary: false,
     styleOverride: (v) => v == null ? {} : v < 1.8 ? { color: '#16a34a' } : v > 2.3 ? { color: '#dc2626' } : {} },
   { key: 'sameDagPct',          label: 'Kontakttid',       fmt: r => fmtPct(r.sameDagPct),            primary: false },
@@ -158,6 +159,11 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     vrakbiler:         rows.reduce((s, r) => s + r.vrakbiler,      0),
     plattformCount:    rows.reduce((s, r) => s + r.plattformCount, 0),
     nettoAntallVidere: rows.reduce((s, r) => s + r.nettoAntallVidere, 0),
+    konvFraPlattform:  (() => {
+      const totalPlt   = rows.reduce((s, r) => s + r.plattformCount, 0)
+      const totalBiler = rows.reduce((s, r) => s + r.bilerKjopt, 0)
+      return totalPlt === 0 ? null : totalBiler / totalPlt
+    })(),
   }
 }
 
