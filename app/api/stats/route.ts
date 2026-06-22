@@ -35,6 +35,13 @@ export interface RepStatsEntry {
   sameDagPct: number | null               // share of "1. Samme dag" kontakttid category (0–1)
   kontakttidBreakdown: Record<string, number>  // category → lead_count
   avgKontakttidDays: number | null        // average days from lead received to first contact
+  // Antall videre breakdown
+  kommisjon:         number
+  fjernkommisjon:    number
+  salgshjelp:        number
+  vrakbiler:         number
+  plattformCount:    number
+  nettoAntallVidere: number               // salesNetto (dedup by hs_deal_id) + plattformCount
 }
 
 export interface StatsData {
@@ -170,8 +177,25 @@ function buildMetrics(
     }
     const fastprisPct = bilerKjopt === 0 ? null : fastprisBiler / bilerKjopt
 
-    const plattformCount = konvPlattformMap.get(k) ?? 0
+    const plattformCount    = konvPlattformMap.get(k) ?? 0
     const konvPlattformRate = leadsCount === 0 ? null : plattformCount / leadsCount
+
+    // Antall videre breakdown
+    const kommisjon      = repSales.filter(s => s.salgstype === 'Kommisjon').reduce((n, s) => n + (s.biler ?? 0), 0)
+    const fjernkommisjon = repSales.filter(s => s.salgstype === 'Fjernkommisjon').reduce((n, s) => n + (s.biler ?? 0), 0)
+    const salgshjelp     = repSales.filter(s => s.bonustype === 'Salgshjelp').reduce((n, s) => n + (s.biler ?? 0), 0)
+    const vrakbiler      = repSales.filter(s => s.innkjopstype === 'b2b_scrap').reduce((n, s) => n + (s.biler ?? 0), 0)
+    const qualifyingSales = repSales.filter(s =>
+      s.salgstype === 'Kommisjon' || s.salgstype === 'Fjernkommisjon' ||
+      s.bonustype === 'Salgshjelp' || s.innkjopstype === 'b2b_scrap'
+    )
+    const salesNettoMap = new Map<string, number>()
+    for (const s of qualifyingSales) {
+      const key = s.hs_deal_id ?? `_id_${s.id}`
+      salesNettoMap.set(key, (salesNettoMap.get(key) ?? 0) + (s.biler ?? 0))
+    }
+    const salesNetto      = [...salesNettoMap.values()].reduce((sum, b) => sum + b, 0)
+    const nettoAntallVidere = salesNetto + plattformCount
 
     const catMap = kontakttidMap.get(k)
     const sameDagCount = catMap?.get('1. Samme dag') ?? 0
@@ -196,6 +220,12 @@ function buildMetrics(
       sameDagPct,
       kontakttidBreakdown,
       avgKontakttidDays,
+      kommisjon,
+      fjernkommisjon,
+      salgshjelp,
+      vrakbiler,
+      plattformCount,
+      nettoAntallVidere,
     }
   })
 }

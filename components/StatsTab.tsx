@@ -59,18 +59,24 @@ interface ColDef {
 }
 
 const COLS: ColDef[] = [
-  { key: 'bilerKjopt',        label: 'Biler kjøpt',    fmt: r => fmt(r.bilerKjopt),               primary: true  },
-  { key: 'fullprisPct',       label: 'Andel fullpris', fmt: r => fmtPct(r.fullprisPct),           primary: true  },
+  { key: 'bilerKjopt',          label: 'Biler kjøpt',      fmt: r => fmt(r.bilerKjopt),               primary: true  },
+  { key: 'fullprisPct',         label: 'Andel fullpris',   fmt: r => fmtPct(r.fullprisPct),           primary: true  },
   { key: 'konvertering',        label: 'Konv. (teller)',   fmt: r => fmtKonv(r.konvertering),         primary: true  },
-  { key: 'konverteringHandtert', label: 'Konv. (håndtert)', fmt: r => fmtKonv(r.konverteringHandtert), primary: true  },
-  { key: 'npsScore',          label: 'NPS',            fmt: r => fmtNps(r.npsScore),              primary: true  },
-  { key: 'konvPlattformRate',   label: 'Konv plt.',        fmt: r => fmtPct(r.konvPlattformRate),       primary: false },
-  { key: 'avgKontakttidDays',  label: 'Avg. kontakttid',  fmt: r => fmtAvgDays(r.avgKontakttidDays),  primary: false,
+  { key: 'konverteringHandtert',label: 'Konv. (håndtert)', fmt: r => fmtKonv(r.konverteringHandtert), primary: true  },
+  { key: 'npsScore',            label: 'NPS',              fmt: r => fmtNps(r.npsScore),              primary: true  },
+  { key: 'nettoAntallVidere',   label: 'Netto videre',     fmt: r => fmt(r.nettoAntallVidere),        primary: true  },
+  { key: 'kommisjon',           label: 'Kommisjon',        fmt: r => fmt(r.kommisjon),                primary: false },
+  { key: 'fjernkommisjon',      label: 'Fjernkom.',        fmt: r => fmt(r.fjernkommisjon),           primary: false },
+  { key: 'salgshjelp',          label: 'Salgshjelp',       fmt: r => fmt(r.salgshjelp),               primary: false },
+  { key: 'vrakbiler',           label: 'Vrakbiler',        fmt: r => fmt(r.vrakbiler),                primary: false },
+  { key: 'plattformCount',      label: 'Til plattform',    fmt: r => fmt(r.plattformCount),           primary: false },
+  { key: 'konvPlattformRate',   label: 'Konv plt.',        fmt: r => fmtPct(r.konvPlattformRate),     primary: false },
+  { key: 'avgKontakttidDays',   label: 'Avg. kontakttid',  fmt: r => fmtAvgDays(r.avgKontakttidDays), primary: false,
     styleOverride: (v) => v == null ? {} : v < 1.8 ? { color: '#16a34a' } : v > 2.3 ? { color: '#dc2626' } : {} },
-  { key: 'sameDagPct',         label: 'Kontakttid',       fmt: r => fmtPct(r.sameDagPct),             primary: false },
-  { key: 'leads',             label: 'Leads teller',   fmt: r => fmt(r.leads),                    primary: false },
-  { key: 'leadsHandtert',    label: 'Leads håndtert', fmt: r => fmt(r.leadsHandtert),             primary: false },
-  { key: 'fastprisPct',       label: 'Andel Fastpris', fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
+  { key: 'sameDagPct',          label: 'Kontakttid',       fmt: r => fmtPct(r.sameDagPct),            primary: false },
+  { key: 'leads',               label: 'Leads teller',     fmt: r => fmt(r.leads),                    primary: false },
+  { key: 'leadsHandtert',       label: 'Leads håndtert',   fmt: r => fmt(r.leadsHandtert),            primary: false },
+  { key: 'fastprisPct',         label: 'Andel Fastpris',   fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
 ]
 
 // ─── Conditional formatting ───────────────────────────────────────────────────
@@ -143,6 +149,12 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     sameDagPct:           ktRows.length   === 0 ? null : ktRows.reduce((s, r)   => s + r.sameDagPct!,        0) / ktRows.length,
     avgKontakttidDays:    (() => { const r = rows.filter(r => r.avgKontakttidDays != null); return r.length === 0 ? null : r.reduce((s, r) => s + r.avgKontakttidDays!, 0) / r.length })(),
     kontakttidBreakdown:  {},
+    kommisjon:         rows.reduce((s, r) => s + r.kommisjon,      0),
+    fjernkommisjon:    rows.reduce((s, r) => s + r.fjernkommisjon, 0),
+    salgshjelp:        rows.reduce((s, r) => s + r.salgshjelp,     0),
+    vrakbiler:         rows.reduce((s, r) => s + r.vrakbiler,      0),
+    plattformCount:    rows.reduce((s, r) => s + r.plattformCount, 0),
+    nettoAntallVidere: rows.reduce((s, r) => s + r.nettoAntallVidere, 0),
   }
 }
 
