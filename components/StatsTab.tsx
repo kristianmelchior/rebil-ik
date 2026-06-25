@@ -82,6 +82,9 @@ const ALL_COLS: ColDef[] = [
   { key: 'leads',               label: 'Leads teller',     fmt: r => fmt(r.leads),                    primary: false },
   { key: 'leadsHandtert',       label: 'Leads håndtert',   fmt: r => fmt(r.leadsHandtert),            primary: false },
   { key: 'fastprisPct',         label: 'Andel Fastpris',   fmt: r => fmtPct(r.fastprisPct),           primary: false, neutral: true },
+  { key: 'antallAvvik',        label: 'Avvik',            fmt: r => fmt(r.antallAvvik),              primary: false, neutral: true },
+  { key: 'antallEttersalg',    label: 'Ettersalg',        fmt: r => fmt(r.antallEttersalg),          primary: false, neutral: true },
+  { key: 'andelViderefakturert', label: 'Viderefakt.',    fmt: r => fmtPct(r.andelViderefakturert),  primary: false, neutral: true },
 ]
 
 // ─── Conditional formatting ───────────────────────────────────────────────────
@@ -148,7 +151,11 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     konvertering:         konvRows.length === 0 ? null : konvRows.reduce((s, r) => s + r.konvertering!,         0) / konvRows.length,
     konverteringHandtert: (() => { const r = rows.filter(r => r.konverteringHandtert != null); return r.length === 0 ? null : r.reduce((s, r) => s + r.konverteringHandtert!, 0) / r.length })(),
     npsScore:          npsRows.length  === 0 ? null : npsRows.reduce((s, r)  => s + r.npsScore!,          0) / npsRows.length,
-    fullprisPct:       prisRows.length === 0 ? null : prisRows.reduce((s, r) => s + r.fullprisPct!,       0) / prisRows.length,
+    fullprisPct:       (() => {
+      const pb = rows.reduce((acc, r) => { for (const [k, v] of Object.entries(r.prisBreakdown)) acc[k] = (acc[k] ?? 0) + v; return acc }, {} as Record<string, number>)
+      const tot = Object.values(pb).reduce((s, v) => s + v, 0)
+      return tot === 0 ? null : (pb['Pris'] ?? 0) / tot
+    })(),
     fastprisPct:       fastRows.length === 0 ? null : fastRows.reduce((s, r) => s + r.fastprisPct!,       0) / fastRows.length,
     konvPlattformRate:    pltRows.length  === 0 ? null : pltRows.reduce((s, r)  => s + r.konvPlattformRate!, 0) / pltRows.length,
     sameDagPct:           ktRows.length   === 0 ? null : ktRows.reduce((s, r)   => s + r.sameDagPct!,        0) / ktRows.length,
@@ -176,6 +183,15 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
       const totalPlt   = rows.reduce((s, r) => s + r.plattformCount, 0)
       const totalBiler = rows.reduce((s, r) => s + r.bilerKjopt, 0)
       return totalPlt === 0 ? null : totalBiler / totalPlt
+    })(),
+    antallAvvik:          rows.reduce((s, r) => s + r.antallAvvik, 0),
+    antallEttersalg:      rows.reduce((s, r) => s + r.antallEttersalg, 0),
+    ettersalgKostnad:     rows.reduce((s, r) => s + r.ettersalgKostnad, 0),
+    ettersalgFakturert:   rows.reduce((s, r) => s + r.ettersalgFakturert, 0),
+    andelViderefakturert: (() => {
+      const k = rows.reduce((s, r) => s + r.ettersalgKostnad, 0)
+      const f = rows.reduce((s, r) => s + r.ettersalgFakturert, 0)
+      return k === 0 ? null : f / k
     })(),
   }
 }
