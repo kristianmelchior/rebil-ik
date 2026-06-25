@@ -42,6 +42,10 @@ export interface RepStatsEntry {
   vrakbiler:           number
   plattformCount:      number
   nettoAntallVidere:   number               // salesNetto (dedup by hs_deal_id) + plattformCount
+  // Prisgrense breakdown (excl. b2b_scrap): biler per kategori
+  prisBreakdown: Record<string, number>
+  // Biler kjøpt breakdown by tjeneste (kolonne Z i Kjøpte biler-arket)
+  tjenesteBreakdown: Record<string, number>
   // Konvertering fra plattform: alle kjøpte biler / antall lagt i plattform
   // B2B og Retail går alltid gjennom plattform; Kommisjon/Fjernkom/Vrak/Salgshjelp delvis.
   konvFraPlattform:    number | null        // bilerKjøpt / plattformCount (null if 0 plattform leads)
@@ -89,7 +93,8 @@ async function fetchYears(from: string, to: string) {
   return { sales: [...s1, ...s2], nps: [...n1, ...n2] }
 }
 
-const PRIS_SET = new Set(['Pris', 'Rabattnivå 1', 'Rabattnivå 2', 'Minstepris'])
+const PRIS_CATS = ['Pris', 'Rabatt 1', 'Rabatt 2', 'Minstepris'] as const
+const PRIS_SET  = new Set(PRIS_CATS)
 
 function buildMetrics(
   sales: SaleRow[], leadsAgg: LeadRangeAgg[], nps: NpsRow[], from: string, to: string,
@@ -159,14 +164,17 @@ function buildMetrics(
       ? null
       : repNps.reduce((sum, n) => sum + n.nps_adj_score, 0) / repNps.length
 
-    // fullprisPct
-    let prisBiler = 0, totalPrisBiler = 0
+    // fullprisPct + prisBreakdown (excl. b2b_scrap; all non-null prisgrense values included)
+    const prisBreakdown: Record<string, number> = {}
+    let prisBiler = 0
     for (const s of repSales) {
-      if (!s.prisgrense || !PRIS_SET.has(s.prisgrense)) continue
+      if (s.innkjopstype === 'b2b_scrap') continue
+      if (!s.prisgrense) continue
       const b = s.biler ?? 0
-      totalPrisBiler += b
+      prisBreakdown[s.prisgrense] = (prisBreakdown[s.prisgrense] ?? 0) + b
       if (s.prisgrense === 'Pris') prisBiler += b
     }
+    const totalPrisBiler = Object.values(prisBreakdown).reduce((s, v) => s + v, 0)
     const fullprisPct = totalPrisBiler === 0 ? null : prisBiler / totalPrisBiler
 
     // fastprisPct
@@ -200,6 +208,13 @@ function buildMetrics(
     const salesNetto      = [...salesNettoMap.values()].reduce((sum, b) => sum + b, 0)
     const nettoAntallVidere = salesNetto + plattformCount
 
+    // tjeneste breakdown
+    const tjenesteBreakdown: Record<string, number> = {}
+    for (const s of repSales) {
+      const t = s.tjeneste ?? 'Ukjent'
+      tjenesteBreakdown[t] = (tjenesteBreakdown[t] ?? 0) + (s.biler ?? 0)
+    }
+
     // Konvertering fra plattform: bilerKjøpt / plattformCount
     const konvFraPlattform = plattformCount === 0 ? null : bilerKjopt / plattformCount
 
@@ -232,6 +247,8 @@ function buildMetrics(
       vrakbiler,
       plattformCount,
       nettoAntallVidere,
+      prisBreakdown,
+      tjenesteBreakdown,
       konvFraPlattform,
     }
   })

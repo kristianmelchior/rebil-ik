@@ -61,6 +61,7 @@ interface ColDef {
 // Detail columns shown when "Netto videre" is expanded
 const VIDERE_DETAIL_KEYS = new Set(['kommisjon', 'fjernkommisjon', 'salgshjelp', 'vrakbiler', 'plattformCount'])
 
+
 const ALL_COLS: ColDef[] = [
   { key: 'bilerKjopt',          label: 'Biler kjøpt',      fmt: r => fmt(r.bilerKjopt),               primary: true  },
   { key: 'nettoAntallVidere',   label: 'Netto videre',     fmt: r => fmt(r.nettoAntallVidere),        primary: true  },
@@ -153,6 +154,18 @@ function computeTotals(rows: RepStatsEntry[]): RepStatsEntry {
     sameDagPct:           ktRows.length   === 0 ? null : ktRows.reduce((s, r)   => s + r.sameDagPct!,        0) / ktRows.length,
     avgKontakttidDays:    (() => { const r = rows.filter(r => r.avgKontakttidDays != null); return r.length === 0 ? null : r.reduce((s, r) => s + r.avgKontakttidDays!, 0) / r.length })(),
     kontakttidBreakdown:  {},
+    prisBreakdown: rows.reduce((acc, r) => {
+      for (const [k, v] of Object.entries(r.prisBreakdown)) {
+        acc[k] = (acc[k] ?? 0) + v
+      }
+      return acc
+    }, {} as Record<string, number>),
+    tjenesteBreakdown: rows.reduce((acc, r) => {
+      for (const [k, v] of Object.entries(r.tjenesteBreakdown)) {
+        acc[k] = (acc[k] ?? 0) + v
+      }
+      return acc
+    }, {} as Record<string, number>),
     kommisjon:         rows.reduce((s, r) => s + r.kommisjon,      0),
     fjernkommisjon:    rows.reduce((s, r) => s + r.fjernkommisjon, 0),
     salgshjelp:        rows.reduce((s, r) => s + r.salgshjelp,     0),
@@ -187,6 +200,9 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
   const [sortDir,           setSortDir]           = useState<'asc' | 'desc'>('desc')
   const [tlFilter,          setTlFilter]          = useState<string>(defaultTlFilter ?? '__all__')
   const [showVidereDetails, setShowVidereDetails] = useState(false)
+  const [showKjoptDetails,  setShowKjoptDetails]  = useState(false)
+  const [showPrisDetails,   setShowPrisDetails]   = useState(false)
+  const [tjenesteSortCat,   setTjenesteSortCat]   = useState<string | null>(null)
 
   const visibleCols = ALL_COLS.filter(c => showVidereDetails || !VIDERE_DETAIL_KEYS.has(c.key as string))
 
@@ -200,10 +216,20 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
   }, [mode, period])
 
   function handleSort(key: SortKey) {
+    setTjenesteSortCat(null)
     if (key === sortKey) {
       setSortDir(d => d === 'asc' ? 'desc' : 'asc')
     } else {
       setSortKey(key)
+      setSortDir('desc')
+    }
+  }
+
+  function handleTjenesteSort(cat: string) {
+    if (tjenesteSortCat === cat) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setTjenesteSortCat(cat)
       setSortDir('desc')
     }
   }
@@ -217,10 +243,54 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
   const filteredRows = useMemo(() => {
     const rows = data?.rows ?? []
     const base = tlFilter === '__all__' ? rows : rows.filter(r => r.teamleder === tlFilter)
+    if (tjenesteSortCat) {
+      return [...base].sort((a, b) => {
+        const av = a.tjenesteBreakdown[tjenesteSortCat] ?? 0
+        const bv = b.tjenesteBreakdown[tjenesteSortCat] ?? 0
+        return sortDir === 'asc' ? av - bv : bv - av
+      })
+    }
     return sortRows(base, sortKey, sortDir)
-  }, [data, tlFilter, sortKey, sortDir])
+  }, [data, tlFilter, sortKey, sortDir, tjenesteSortCat])
 
   const totals = useMemo(() => computeTotals(filteredRows), [filteredRows])
+
+  const PRIS_ORDER = ['Rabattnivå 1', 'Rabattnivå 2', 'Minstepris']
+
+  // Derive pris detail categories from filtered rows (excl. 'Pris'), fixed order + unknown last
+  const prisCategories = useMemo(() => {
+    if (!showPrisDetails) return []
+    const seen = new Set<string>()
+    for (const row of filteredRows) {
+      for (const k of Object.keys(row.prisBreakdown)) {
+        if (k !== 'Pris') seen.add(k)
+      }
+    }
+    const known   = PRIS_ORDER.filter(k => seen.has(k))
+    const unknown = [...seen].filter(k => !PRIS_ORDER.includes(k)).sort()
+    return [...known, ...unknown]
+  }, [showPrisDetails, filteredRows])
+
+  // Derive tjeneste categories from filtered rows, sorted by total desc
+  const tjenestenCategories = useMemo(() => {
+    if (!showKjoptDetails) return []
+    const sums: Record<string, number> = {}
+    for (const row of filteredRows) {
+      for (const [k, v] of Object.entries(row.tjenesteBreakdown)) {
+        sums[k] = (sums[k] ?? 0) + v
+      }
+    }
+    return Object.entries(sums)
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => {
+        const aLast = a[0].toLowerCase().includes('publisert')
+        const bLast = b[0].toLowerCase().includes('publisert')
+        if (aLast && !bLast) return 1
+        if (!aLast && bLast) return -1
+        return b[1] - a[1]
+      })
+      .map(([k]) => k)
+  }, [showKjoptDetails, filteredRows])
 
   return (
     <div className="space-y-5">
@@ -274,9 +344,9 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
       </div>
 
       {/* Table */}
-      <div className="bg-surface border border-border rounded-card overflow-x-auto">
+      <div className="bg-surface border border-border rounded-card overflow-x-auto max-h-[calc(100vh-180px)] overflow-y-auto">
         <table className="w-full text-sm">
-          <thead>
+          <thead className="sticky top-0 z-20 bg-surface">
             <tr className="border-b border-border">
               {/* Name — sortable, sticky */}
               <th
@@ -286,7 +356,60 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
                 Selger <SortIcon active={sortKey === 'rep_name'} dir={sortDir} />
               </th>
               {visibleCols.map(col => (
-                col.key === 'nettoAntallVidere' ? (
+                col.key === 'bilerKjopt' ? (
+                  <React.Fragment key="bilerKjopt-group">
+                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap select-none font-semibold text-text-primary">
+                      <span
+                        onClick={() => setShowKjoptDetails(v => !v)}
+                        className="inline-flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
+                        title={showKjoptDetails ? 'Skjul detaljer' : 'Vis detaljer'}
+                      >
+                        {col.label}
+                        <span className={`inline-block transition-transform duration-200 ${showKjoptDetails ? 'rotate-180' : ''}`}>▾</span>
+                      </span>
+                      {' '}
+                      <span onClick={() => handleSort(col.key)} className="cursor-pointer hover:opacity-70 transition-opacity">
+                        <SortIcon active={sortKey === col.key} dir={sortDir} />
+                      </span>
+                    </th>
+                    {showKjoptDetails && tjenestenCategories.map(cat => (
+                      <th
+                        key={`tj_${cat}`}
+                        title={cat}
+                        onClick={() => handleTjenesteSort(cat)}
+                        className="min-w-[100px] px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap font-medium text-text-muted cursor-pointer select-none hover:text-text-primary"
+                      >
+                        {cat.length > 14 ? cat.slice(0, 13) + '…' : cat} <SortIcon active={tjenesteSortCat === cat} dir={sortDir} />
+                      </th>
+                    ))}
+                  </React.Fragment>
+                ) : col.key === 'fullprisPct' ? (
+                  <React.Fragment key="fullpris-group">
+                    <th className="px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap select-none font-semibold text-text-primary">
+                      <span
+                        onClick={() => setShowPrisDetails(v => !v)}
+                        className="inline-flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
+                        title={showPrisDetails ? 'Skjul detaljer' : 'Vis detaljer'}
+                      >
+                        {col.label}
+                        <span className={`inline-block transition-transform duration-200 ${showPrisDetails ? 'rotate-180' : ''}`}>▾</span>
+                      </span>
+                      {' '}
+                      <span onClick={() => handleSort(col.key)} className="cursor-pointer hover:opacity-70 transition-opacity">
+                        <SortIcon active={sortKey === col.key} dir={sortDir} />
+                      </span>
+                    </th>
+                    {showPrisDetails && prisCategories.map(cat => (
+                      <th
+                        key={`pris_${cat}`}
+                        onClick={() => handleSort(col.key)}
+                        className="px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap font-medium text-text-muted cursor-pointer select-none hover:text-text-primary"
+                      >
+                        {cat} <SortIcon active={false} dir={sortDir} />
+                      </th>
+                    ))}
+                  </React.Fragment>
+                ) : col.key === 'nettoAntallVidere' ? (
                   <th
                     key={col.key as string}
                     className="px-4 py-3 text-right text-xs uppercase tracking-wider whitespace-nowrap select-none font-semibold text-text-primary"
@@ -345,15 +468,49 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
                     )}
                   </td>
                   {visibleCols.map(col => (
-                    <td
-                      key={col.key as string}
-                      style={col.styleOverride ? col.styleOverride(row[col.key] as number | null) : col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
-                      className={`px-4 py-3 text-right tabular-nums ${
-                        col.primary ? 'font-semibold' : 'font-normal'
-                      }`}
-                    >
-                      {col.fmt(row)}
-                    </td>
+                    col.key === 'fullprisPct' ? (
+                      <React.Fragment key="fullpris-group">
+                        <td
+                          style={condStyle(row.fullprisPct, filteredRows, 'fullprisPct')}
+                          className="px-4 py-3 text-right tabular-nums font-semibold"
+                        >
+                          {col.fmt(row)}
+                        </td>
+                        {showPrisDetails && prisCategories.map(cat => {
+                          const total = Object.values(row.prisBreakdown).reduce((s, v) => s + v, 0)
+                          const pct = total === 0 ? null : (row.prisBreakdown[cat] ?? 0) / total
+                          return (
+                            <td key={`pris_${cat}`} className="px-4 py-3 text-right tabular-nums font-normal text-text-muted">
+                              {pct === null ? '—' : fmtPct(pct)}
+                            </td>
+                          )
+                        })}
+                      </React.Fragment>
+                    ) : col.key === 'bilerKjopt' ? (
+                      <React.Fragment key="bilerKjopt-group">
+                        <td
+                          style={condStyle(row.bilerKjopt, filteredRows, 'bilerKjopt')}
+                          className="px-4 py-3 text-right tabular-nums font-semibold"
+                        >
+                          {col.fmt(row)}
+                        </td>
+                        {showKjoptDetails && tjenestenCategories.map(cat => (
+                          <td key={`tj_${cat}`} className="px-4 py-3 text-right tabular-nums font-normal text-text-muted">
+                            {row.tjenesteBreakdown[cat] ? fmt(row.tjenesteBreakdown[cat]) : '—'}
+                          </td>
+                        ))}
+                      </React.Fragment>
+                    ) : (
+                      <td
+                        key={col.key as string}
+                        style={col.styleOverride ? col.styleOverride(row[col.key] as number | null) : col.neutral ? undefined : condStyle(row[col.key] as number | null, filteredRows, col.key)}
+                        className={`px-4 py-3 text-right tabular-nums ${
+                          col.primary ? 'font-semibold' : 'font-normal'
+                        }`}
+                      >
+                        {col.fmt(row)}
+                      </td>
+                    )
                   ))}
                 </tr>
               ))
@@ -366,14 +523,42 @@ export default function StatsTab({ defaultTlFilter }: { defaultTlFilter?: string
               <tr className="border-t-2 border-border bg-bg">
                 <td className="sticky left-0 z-10 bg-bg px-4 py-3 text-sm font-semibold text-text-primary after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-border">Total</td>
                 {visibleCols.map(col => (
-                  <td
-                    key={col.key as string}
-                    className={`px-4 py-3 text-right tabular-nums font-semibold ${
-                      col.primary ? 'text-text-primary' : 'text-text-muted'
-                    }`}
-                  >
-                    {col.fmt(totals)}
-                  </td>
+                  col.key === 'fullprisPct' ? (
+                    <React.Fragment key="fullpris-group">
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-text-muted">
+                        {col.fmt(totals)}
+                      </td>
+                      {showPrisDetails && prisCategories.map(cat => {
+                        const total = Object.values(totals.prisBreakdown).reduce((s, v) => s + v, 0)
+                        const pct = total === 0 ? null : (totals.prisBreakdown[cat] ?? 0) / total
+                        return (
+                          <td key={`pris_${cat}`} className="px-4 py-3 text-right tabular-nums font-semibold text-text-muted">
+                            {pct === null ? '—' : fmtPct(pct)}
+                          </td>
+                        )
+                      })}
+                    </React.Fragment>
+                  ) : col.key === 'bilerKjopt' ? (
+                    <React.Fragment key="bilerKjopt-group">
+                      <td className="px-4 py-3 text-right tabular-nums font-semibold text-text-primary">
+                        {col.fmt(totals)}
+                      </td>
+                      {showKjoptDetails && tjenestenCategories.map(cat => (
+                        <td key={`tj_${cat}`} className="px-4 py-3 text-right tabular-nums font-semibold text-text-muted">
+                          {totals.tjenesteBreakdown[cat] ? fmt(totals.tjenesteBreakdown[cat]) : '—'}
+                        </td>
+                      ))}
+                    </React.Fragment>
+                  ) : (
+                    <td
+                      key={col.key as string}
+                      className={`px-4 py-3 text-right tabular-nums font-semibold ${
+                        col.primary ? 'text-text-primary' : 'text-text-muted'
+                      }`}
+                    >
+                      {col.fmt(totals)}
+                    </td>
+                  )
                 ))}
               </tr>
             </tfoot>

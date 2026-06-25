@@ -20,6 +20,7 @@ export interface SaleRow {
   bonussats?: number           // legacy column (not used in UI / bonus math)
   bonus: number | null         // bonus NOK per row — Bonusbidrag & base bonus sum
   innkjopstype: string | null  // e.g. 'b2b_scrap', 'b2b_fixedprice', 'b2b_remotecomm'
+  tjeneste: string | null
 }
 
 // Raw row from public.leads
