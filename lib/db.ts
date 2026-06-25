@@ -200,7 +200,7 @@ export const getAllSales = unstable_cache(
         .range(from, to)
     )
   },
-  ['all-sales'],
+  ['all-sales-v2'],
   { revalidate: TTL_SALES_DATA, tags: ['sales-data'] }
 )
 
@@ -628,5 +628,29 @@ export async function getEttersalgByKode(kode: string, year: number): Promise<Et
       .gte('dato', `${year}-01-01`)
       .lte('dato', `${year}-12-31`)
       .range(from, to)
+  )
+}
+
+// Fetch all avvik rows for all reps within a date range.
+export async function getAvvikRange(from: string, to: string): Promise<AvvikRow[]> {
+  return fetchAll<AvvikRow>((rangeFrom, rangeTo) =>
+    supabase
+      .from('avvik')
+      .select('*')
+      .gte('dato', from)
+      .lte('dato', to)
+      .range(rangeFrom, rangeTo)
+  )
+}
+
+// Fetch all ettersalg rows for all reps within a date range.
+export async function getEttersalgRange(from: string, to: string): Promise<EttersalgRow[]> {
+  return fetchAll<EttersalgRow>((rangeFrom, rangeTo) =>
+    supabase
+      .from('ettersalg')
+      .select('*')
+      .gte('dato', from)
+      .lte('dato', to)
+      .range(rangeFrom, rangeTo)
   )
 }
