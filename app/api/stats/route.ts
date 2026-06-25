@@ -2,13 +2,13 @@
 // Admin and teamleder only — returns per-rep metrics for all reps with a defined kode.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKontakttidAvgMonthly, getKonvPerKontakttid, getLeadsHandledRange } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps, getAllRepsWithDetails, getRepByKode, getKonvPlattformRange, getKontakttidRange, getKontakttidAvgMonthly, getKonvPerKontakttid, getLeadsHandledRange, getAvvikRange, getEttersalgRange } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
   isTeamleder,
 } from '@/lib/auth'
-import type { SaleRow, NpsRow, LeadRangeAgg, KonvPlattformRangeAgg, KontakttidRangeAgg, KontakttidAvgAgg, KonvPerKontakttidRow } from '@/lib/types'
+import type { SaleRow, NpsRow, LeadRangeAgg, KonvPlattformRangeAgg, KontakttidRangeAgg, KontakttidAvgAgg, KonvPerKontakttidRow, AvvikRow, EttersalgRow } from '@/lib/types'
 
 function skipKode(kode: string | null | undefined): boolean {
   return kode == null || kode === '' || kode === 'zz_unknown'
@@ -49,6 +49,12 @@ export interface RepStatsEntry {
   // Konvertering fra plattform: alle kjøpte biler / antall lagt i plattform
   // B2B og Retail går alltid gjennom plattform; Kommisjon/Fjernkom/Vrak/Salgshjelp delvis.
   konvFraPlattform:    number | null        // bilerKjøpt / plattformCount (null if 0 plattform leads)
+  // Avvik og ettersalg
+  antallAvvik:          number
+  antallEttersalg:      number
+  ettersalgKostnad:     number              // sum(kostnad) for period
+  ettersalgFakturert:   number              // sum(fakturert_selger) for period
+  andelViderefakturert: number | null       // ettersalgFakturert / ettersalgKostnad, null if no ettersalg
 }
 
 export interface StatsData {
@@ -103,6 +109,8 @@ function buildMetrics(
   kontakttidAgg: KontakttidRangeAgg[],
   kontakttidAvgAgg: KontakttidAvgAgg[],
   leadsHandledByName: Map<string, number>,
+  avvik: AvvikRow[],
+  ettersalg: EttersalgRow[],
 ): RepStatsEntry[] {
   const periodSales = sales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
   const periodNps   = nps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
@@ -117,6 +125,20 @@ function buildMetrics(
   const konvPlattformMap = new Map<string, number>()
   for (const k of konvPlattformAgg) {
     konvPlattformMap.set(k.kode, (konvPlattformMap.get(k.kode) ?? 0) + Number(k.plattform_count))
+  }
+
+  // avvik: count per kode
+  const avvikMap = new Map<string, number>()
+  for (const a of avvik) avvikMap.set(a.kode, (avvikMap.get(a.kode) ?? 0) + 1)
+
+  // ettersalg: count + kostnad + fakturert_selger per kode
+  const ettersalgMap = new Map<string, { count: number; kostnad: number; fakturert: number }>()
+  for (const e of ettersalg) {
+    const acc = ettersalgMap.get(e.kode) ?? { count: 0, kostnad: 0, fakturert: 0 }
+    acc.count += 1
+    acc.kostnad += e.kostnad
+    acc.fakturert += e.fakturert_selger
+    ettersalgMap.set(e.kode, acc)
   }
 
   // kontakttid: group by kode → category → count
@@ -250,6 +272,14 @@ function buildMetrics(
       prisBreakdown,
       tjenesteBreakdown,
       konvFraPlattform,
+      antallAvvik:          avvikMap.get(k) ?? 0,
+      antallEttersalg:      ettersalgMap.get(k)?.count ?? 0,
+      ettersalgKostnad:     ettersalgMap.get(k)?.kostnad ?? 0,
+      ettersalgFakturert:   ettersalgMap.get(k)?.fakturert ?? 0,
+      andelViderefakturert: (() => {
+        const e = ettersalgMap.get(k)
+        return !e || e.kostnad === 0 ? null : e.fakturert / e.kostnad
+      })(),
     }
   })
 }
@@ -277,7 +307,7 @@ export async function GET(request: Request) {
     const fromYear = parseInt(from.slice(0, 4))
     const toYear   = parseInt(to.slice(0, 4))
 
-    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid, leadsHandledAgg, avgCur, avgPrev] = await Promise.all([
+    const [reps, { sales, nps }, leadsAgg, konvPlattformAgg, kontakttidAgg, konvPerKontakttid, leadsHandledAgg, avgCur, avgPrev, avvik, ettersalg] = await Promise.all([
       getAllRepsWithDetails(),
       fetchYears(from, to),
       getLeadsRange(from, to),
@@ -287,6 +317,8 @@ export async function GET(request: Request) {
       getLeadsHandledRange(from, to).catch(() => [] as { dealeier_ik: string; count: number }[]),
       getKontakttidAvgMonthly(fromYear).catch(() => [] as KontakttidAvgAgg[]),
       fromYear !== toYear ? getKontakttidAvgMonthly(toYear).catch(() => [] as KontakttidAvgAgg[]) : Promise.resolve([] as KontakttidAvgAgg[]),
+      getAvvikRange(from, to).catch(() => [] as AvvikRow[]),
+      getEttersalgRange(from, to).catch(() => [] as EttersalgRow[]),
     ])
     const kontakttidAvgAgg = [...avgCur, ...avgPrev]
 
@@ -295,7 +327,7 @@ export async function GET(request: Request) {
 
     // Only include reps with a non-empty kode (skip zz_unknown etc.)
     const activeReps = reps.filter(r => !skipKode(r.kode))
-    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg, kontakttidAvgAgg, leadsHandledByName)
+    const rows = buildMetrics(sales, leadsAgg, nps, from, to, activeReps, konvPlattformAgg, kontakttidAgg, kontakttidAvgAgg, leadsHandledByName, avvik, ettersalg)
 
     return Response.json({ rows, konvPerKontakttid, from, to } satisfies StatsData, {
       headers: { 'Cache-Control': 'private, max-age=300, stale-while-revalidate=60' },
