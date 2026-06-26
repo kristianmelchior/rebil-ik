@@ -131,9 +131,9 @@ function buildMetrics(
   const avvikMap = new Map<string, number>()
   for (const a of avvik) avvikMap.set(a.kode, (avvikMap.get(a.kode) ?? 0) + 1)
 
-  // ettersalg: count + kostnad + fakturert_selger per kode
   const ettersalgMap = new Map<string, { count: number; kostnad: number; fakturert: number }>()
   for (const e of ettersalg) {
+    if (e.kostnad <= 0) continue
     const acc = ettersalgMap.get(e.kode) ?? { count: 0, kostnad: 0, fakturert: 0 }
     acc.count += 1
     acc.kostnad += e.kostnad

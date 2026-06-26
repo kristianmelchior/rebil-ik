@@ -151,6 +151,7 @@ export const getTeamMembers = unstable_cache(
       .from('reps')
       .select('kode, full_name')
       .eq('teamleder', teamlederName)
+      .neq('rolle', 'Sluttet')
       .order('full_name')
     if (error) throw error
     return (data ?? []) as { kode: string; full_name: string }[]
@@ -165,6 +166,7 @@ export const getAllRepsWithDetails = unstable_cache(
     const { data, error } = await supabase
       .from('reps')
       .select('kode, full_name, teamleder')
+      .neq('rolle', 'Sluttet')
       .order('full_name')
     if (error) throw error
     return (data ?? []) as { kode: string; full_name: string; teamleder: string }[]
@@ -179,6 +181,7 @@ export const getAllRepsForPicker = unstable_cache(
     const { data, error } = await supabase
       .from('reps')
       .select('kode, full_name')
+      .neq('rolle', 'Sluttet')
       .order('full_name')
     if (error) throw error
     return (data ?? []) as { kode: string; full_name: string }[]
