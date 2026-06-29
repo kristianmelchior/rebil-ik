@@ -1,7 +1,7 @@
 // GET /api/toplist?period=YYYY-MM — team leaderboard for a given month.
 
 import { cookies } from 'next/headers'
-import { getAllSales, getLeadsRange, getAllNps } from '@/lib/db'
+import { getAllSales, getLeadsRange, getAllNps, getAllRepsForPicker } from '@/lib/db'
 import {
   SESSION_COOKIE_NAME,
   ADMIN_SESSION_COOKIE_NAME,
@@ -65,17 +65,20 @@ export async function GET(request: Request) {
   const to   = `${period}-${String(lastDay).padStart(2, '0')}`
 
   try {
-    const [allSales, leadsAgg, allNps] = await Promise.all([
+    const [allSales, leadsAgg, allNps, activeReps] = await Promise.all([
       getAllSales(year),
       getLeadsRange(from, to),
       getAllNps(year),
+      getAllRepsForPicker(),
     ])
+
+    const activeKodes = new Set(activeReps.map(r => r.kode))
 
     const sales = allSales.filter(s => s.dato_kjopt >= from && s.dato_kjopt <= to)
     const nps   = allNps.filter(n   => n.submitted_at >= from && n.submitted_at <= to)
 
     const nameMap = buildRepNameMap(sales, nps)
-    const kodes   = Array.from(nameMap.keys())
+    const kodes   = Array.from(nameMap.keys()).filter(k => activeKodes.has(k))
 
     // ── Biler kjøpt ──
     const bilerMap = new Map<string, number>()
